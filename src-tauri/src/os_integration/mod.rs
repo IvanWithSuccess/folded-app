@@ -1,5 +1,6 @@
 use std::process::Command;
 use anyhow::{Result, anyhow};
+#[cfg(target_os = "macos")]
 use std::fs;
 
 pub fn mount_drive(port: u16, _drive_letter: &str) -> Result<()> {
@@ -70,7 +71,7 @@ pub fn mount_drive(port: u16, _drive_letter: &str) -> Result<()> {
 pub fn unmount_drive(_drive_letter: &str) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("net").args(["use", drive_letter, "/delete"]).status()?;
+        Command::new("net").args(["use", _drive_letter, "/delete"]).status()?;
     }
     
     #[cfg(target_os = "macos")]
