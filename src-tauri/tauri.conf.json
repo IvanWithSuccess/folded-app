@@ -1,7 +1,7 @@
 {
   "productName": "Folded",
   "version": "0.1.0",
-  "identifier": "com.folded.app",
+  "identifier": "com.folded.cloud",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
