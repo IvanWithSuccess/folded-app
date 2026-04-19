@@ -1,0 +1,23 @@
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust & Tauri
+src-tauri/target/
+src-tauri/gen/
+target/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.*
+!.env.example
