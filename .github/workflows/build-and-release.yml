@@ -1,0 +1,46 @@
+name: 'Publish Build Releases'
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+
+jobs:
+  publish-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        # We will compile for Windows (.exe) and macOS (.dmg/.app)
+        platform: [windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Node.js setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build and Release the Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # This token is automatically provided by GitHub Actions
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Action automatically extracts the version from tauri.conf.json
+          tagName: v__VERSION__ 
+          releaseName: 'Folded Cloud v__VERSION__'
+          releaseBody: 'Automatic build from GitHub Actions.'
+          releaseDraft: false
+          prerelease: false
