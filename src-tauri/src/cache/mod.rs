@@ -212,6 +212,7 @@ impl MetadataCache {
         Ok(files)
     }
 
+    #[allow(dead_code)]
     pub async fn get_file_by_name(&self, name: &str) -> Result<Option<FileManifest>> {
         use sqlx::Row;
         
@@ -644,6 +645,7 @@ impl MetadataCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn delete_notes_by_account(&self, account_id: &str) -> Result<()> {
         sqlx::query("DELETE FROM notes WHERE account_id = ?")
             .bind(account_id)
@@ -651,6 +653,7 @@ impl MetadataCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn delete_files_by_account(&self, account_id: &str) -> Result<()> {
         // Get all file IDs for this account (files where any chunk belongs to this account)
         use sqlx::Row;
@@ -670,6 +673,7 @@ impl MetadataCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn get_all_folders(&self) -> Result<Vec<FolderInfo>> {
         use sqlx::Row;
         let rows = sqlx::query("SELECT * FROM folders").fetch_all(&self.pool).await?;
@@ -682,6 +686,7 @@ impl MetadataCache {
         }).collect())
     }
 
+    #[allow(dead_code)]
     pub async fn get_all_files(&self) -> Result<Vec<FileManifest>> {
         use sqlx::Row;
         let ids: Vec<String> = sqlx::query("SELECT id FROM files").fetch_all(&self.pool).await?

@@ -174,6 +174,7 @@ impl SessionManager {
         active.iter().map(|s| s.account_info.clone()).collect()
     }
 
+    #[allow(dead_code)]
     pub async fn update_account_last_indexed(&self, account_id: &str, timestamp: i64) -> Result<()> {
         let mut active = self.active_sessions.lock().await;
         if let Some(session) = active.iter_mut().find(|s| s.account_info.id == account_id) {
