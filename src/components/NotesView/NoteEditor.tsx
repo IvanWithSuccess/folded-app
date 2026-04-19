@@ -49,7 +49,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [loadingAttachments, setLoadingAttachments] = useState(false);
 
   const isNew = !note;
-  const isReadOnly = note && !note.from_self;
+  const isReadOnly = note ? !note.from_self : false;
 
   useEffect(() => {
     if (note) {

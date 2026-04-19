@@ -44,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {this.state.error?.message || 'Unexpected rendering error in inspector module.'}
           </p>
           <button 
-            onClick={handleReset}
+            onClick={this.handleReset}
             className="flex items-center gap-2 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
           >
             <RefreshCw size={14} />

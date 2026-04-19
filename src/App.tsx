@@ -35,7 +35,7 @@ function App() {
   } = useAppStore();
 
   const { initialize, startSync, checkOnboarding } = useAppInitialization();
-  const taskTimeout = React.useRef<NodeJS.Timeout | null>(null);
+  const taskTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     initialize();

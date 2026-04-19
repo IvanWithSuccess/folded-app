@@ -50,7 +50,7 @@ export const Sidebar: React.FC = () => {
                 >
                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   <HardDrive size={16} className={isActiveDrive ? 'text-blue-400' : ''} />
-                  <span className="text-[12px] font-medium truncate flex-1">{account.name}</span>
+                  <span className="text-[12px] font-medium truncate flex-1">{account.username || account.first_name || 'Account'}</span>
                 </div>
 
                 <AnimatePresence>
