@@ -62,6 +62,22 @@ export function useFileExplorer() {
     dropTarget, setDropTarget,
     clipboard, setClipboard,
     dragItemRef, dropTargetRef, pathRef,
-    refreshCurrentView, initColumns, fetchColumnData
+    refreshCurrentView, initColumns, fetchColumnData,
+    navigateToItem: async (accountId: string, pathIds: string[], targetItemId: string) => {
+      // 1. Switch account if necessary (handled by store subscription usually, 
+      // but we need to ensure the columns refresh for the RIGHT account)
+      // The store's activeAccountId is a dependency of fetchColumnData
+      
+      // 2. Reconstruct path and columns
+      const fullPath: (string | null)[] = [null, ...pathIds];
+      const newCols = [];
+      for (const p of fullPath) {
+        newCols.push(await fetchColumnData(p));
+      }
+      
+      setPath(fullPath);
+      setColumns(newCols);
+      setSelectedItems(new Set([targetItemId]));
+    }
   };
 }

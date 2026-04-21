@@ -48,7 +48,8 @@ impl ClusterOrchestrator {
                     return Ok(None);
                 }
 
-                log::info!("Starting upload of chunk {} ({} bytes) to account {}", part_index, actual_size, account_id);
+                let chunk_uuid = uuid::Uuid::new_v4().to_string();
+                log::info!("Starting upload of chunk {} [{}] ({} bytes) to account {}", part_index, chunk_uuid, actual_size, account_id);
 
                 let mut retries = 3;
                 let mut last_err = None;
@@ -64,16 +65,19 @@ impl ClusterOrchestrator {
                     match client.upload_stream(
                         &mut stream,
                         actual_size as usize,
-                        format!("chunk_{}.dat", part_index)
+                        format!("FOLDED-{}-{}-{}.dat", upload_id, chunk_uuid, part_index)
                     ).await {
                         Ok(uploaded_file) => {
                             let input_peer_self = tl::types::InputPeerSelf {};
+                            // UUID baked into filename for resilient chunk identification
+                            let chunk_filename = format!("FOLDED-{}-{}-{}.dat", upload_id, chunk_uuid, part_index);
+                            drop(chunk_filename); // already used above in upload_stream
                             match client.send_message(
                                 &input_peer_self,
                                 InputMessage::new().document(uploaded_file)
                             ).await {
                                 Ok(message) => {
-                                    log::info!("Successfully uploaded chunk {} to account {}", part_index, account_id);
+                                    log::info!("Successfully uploaded chunk {} [{}] to account {}", part_index, chunk_uuid, account_id);
                                     
                                     let mut total = total_uploaded.lock().await;
                                     *total += actual_size;
@@ -89,9 +93,11 @@ impl ClusterOrchestrator {
                                     }
 
                                     return Ok(Some(ChunkMeta {
+                                        chunk_id: chunk_uuid,
                                         account_id,
                                         part_index,
                                         message_id: message.id() as i64,
+                                        size_bytes: actual_size,
                                     }));
                                 }
                                 Err(e) => {

@@ -235,6 +235,9 @@ impl ClusterOrchestrator {
         if discovered_count > 0 || audit_count > 0 {
             log::info!("Crawl batch done for {}: processed {} messages", account_id, discovered_count + audit_count);
             let _ = self.push_manifest(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await;
+            
+            // Update indexing timestamp in account metadata
+            let _ = session_manager.update_account_last_indexed(account_id, chrono::Utc::now().timestamp()).await;
         }
 
         Ok(())
@@ -263,10 +266,12 @@ impl ClusterOrchestrator {
                         total_size: doc.size().unwrap_or(0) as u64,
                         chunk_size: doc.size().unwrap_or(0) as u64,
                         chunks: vec![ChunkMeta {
-                            account_id: account_id.to_string(),
-                            part_index: 0,
-                            message_id: msg.id() as i64,
-                        }],
+                                        chunk_id: format!("ext_{}_{}", account_id, msg.id()),
+                                        account_id: account_id.to_string(),
+                                        part_index: 0,
+                                        message_id: msg.id() as i64,
+                                        size_bytes: doc.size().unwrap_or(0) as u64,
+                                    }],
                         folder_id: None,
                         account_id: Some(account_id.to_string()),
                         storage_hub_id: None,

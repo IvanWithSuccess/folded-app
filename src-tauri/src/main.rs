@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use tokio::sync::Mutex as TokioMutex;
 use tauri::tray::TrayIconBuilder;
 use tauri::menu::{Menu, MenuItem};
+use anyhow::Result;
 use tauri::Manager;
 
 pub struct SyncTracker {
@@ -64,35 +65,47 @@ fn main() {
 
     let cluster_orchestrator = Arc::new(ClusterOrchestrator::new());
     
-    let webdav_bridge = WebDavBridge::new(
+    let webdav_bridge = Arc::new(WebDavBridge::new(
         Arc::clone(&metadata_cache),
         Arc::clone(&cluster_orchestrator),
         Arc::clone(&session_manager),
         tmp_dir,
-    );
+    ));
 
     let cache_for_setup = Arc::clone(&metadata_cache);
     let sync_tracker = Arc::new(SyncTracker::new());
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::clone(&session_manager))
+        .manage(Arc::clone(&webdav_bridge))
         .manage(cluster_orchestrator)
-        .manage(metadata_cache)
+        .manage(Arc::clone(&metadata_cache))
         .manage(sync_tracker)
-        .on_window_event(|window, event| {
+        .on_window_event(|window: &tauri::Window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Prevent window from closing, just hide it to the tray
-                let _ = window.hide();
-                api.prevent_close();
+                let cache = window.state::<Arc<MetadataCache>>();
+                let close_to_tray = tauri::async_runtime::block_on(async {
+                    cache.get_setting("close_to_tray").await.unwrap_or(Some("true".into()))
+                }).unwrap_or("true".to_string()) == "true";
+
+                if close_to_tray {
+                    // Prevent window from closing, just hide it to the tray
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
             }
         })
-        .setup(move |app| {
+        .setup(move |app: &mut tauri::App| {
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>).unwrap();
             let show_i = MenuItem::with_id(app, "show", "Open Folded Cloud", true, None::<&str>).unwrap();
             let menu = Menu::with_items(app, &[&show_i, &quit_i]).unwrap();
             
-            let _tray = TrayIconBuilder::new()
+            let show_tray = tauri::async_runtime::block_on(async {
+                cache_for_setup.get_setting("show_tray_icon").await.unwrap_or(Some("true".into()))
+            }).unwrap_or("true".to_string()) == "true";
+
+            let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(true)
@@ -122,7 +135,25 @@ fn main() {
                 .build(app)
                 .unwrap();
 
+            if let Some(tray) = app.tray_by_id("main-tray") {
+                tray.set_visible(show_tray).unwrap();
+            }
+
+            // Autostart Sync
+            let cache_for_autostart = Arc::clone(&metadata_cache);
+            tauri::async_runtime::spawn(async move {
+                let launch_on_startup = cache_for_autostart.get_setting("launch_on_startup").await
+                    .unwrap_or(Some("false".into()))
+                    .unwrap_or("false".into()) == "true";
+                
+                let _ = crate::os_integration::set_autostart(launch_on_startup);
+            });
+
+            let webdav_bridge = Arc::clone(&webdav_bridge);
             let session_manager = Arc::clone(&session_manager);
+            let cache_for_setup = Arc::clone(&metadata_cache);
+            let metadata_cache = Arc::clone(&metadata_cache);
+
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = session_manager.load_sessions().await {
                     eprintln!("Failed to load saved sessions: {}", e);
@@ -144,20 +175,67 @@ fn main() {
                 }
                 
                 let _ = tauri::async_runtime::spawn(async move {
-                    if let Err(e) = webdav_bridge.start(9876).await {
+                    if let Err(e) = WebDavBridge::start(webdav_bridge, 9876).await {
                         log::error!("WebDAV server error: {}", e);
                     }
                 });
                 
-                log::info!("Initiating virtual drive mount for native streaming in 500ms...");
+                // Initiating mount if enabled
+                let cache_for_mount = Arc::clone(&metadata_cache);
                 tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    let _ = crate::os_integration::mount_drive(9876, "Z:");
+                    let mount_enabled = cache_for_mount.get_setting("mount_drive").await
+                        .unwrap_or(Some("true".into()))
+                        .unwrap_or("true".into()) == "true";
+                    
+                    if mount_enabled {
+                        log::info!("Initiating virtual drive mount for native streaming in 2000ms...");
+                        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+                        let _ = crate::os_integration::mount_drive(9876, "Z:");
+                    } else {
+                        log::info!("Virtual drive mount disabled in settings, skipping.");
+                    }
+                });
+
+                // Background Cache Maintenance Task
+                let cache_for_maintenance = Arc::clone(&metadata_cache);
+                tauri::async_runtime::spawn(async move {
+                    log::info!("Background cache maintenance task started.");
+                    loop {
+                        // Wait 10 minutes between checks
+                        tokio::time::sleep(std::time::Duration::from_secs(600)).await;
+                        
+                        let limit_mb = cache_for_maintenance.get_setting("cache_max_mb").await
+                            .unwrap_or(Some("1024".into()))
+                            .unwrap_or("1024".into())
+                            .parse::<u64>().unwrap_or(1024);
+                        
+                        let limit_bytes = limit_mb * 1024 * 1024;
+                        match cache_for_maintenance.evict_cache_to_limit(limit_bytes).await {
+                            Ok(evicted) if !evicted.is_empty() => {
+                                log::info!("Background maintenance: evicted {} file(s) to stay under {}MB limit.", evicted.len(), limit_mb);
+                            }
+                            Ok(_) => {}
+                            Err(e) => {
+                                log::error!("Background cache maintenance error: {}", e);
+                            }
+                        }
+                    }
                 });
             });
             Ok(())
-        })
-        .invoke_handler(crate::generate_handler![])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        });
+        
+    let app = builder
+        .invoke_handler(crate::generate_handler!())
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle: &tauri::AppHandle, event: tauri::RunEvent| {
+        if let tauri::RunEvent::Reopen { .. } = event {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+    });
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  FolderPlus, Edit3, Trash2, Download, Copy, Scissors, ClipboardPaste, X 
+  FolderPlus, Edit3, Trash2, Download, Copy, Scissors, ClipboardPaste, X, ExternalLink, Monitor
 } from 'lucide-react';
 import { SelectableItem } from '../../types/file';
 import { isFolder } from '../../utils/fileUtils';
@@ -12,6 +12,7 @@ interface FileContextMenuProps {
   onClose: () => void;
   onAction: (action: string) => void;
   pendingMove: { items: SelectableItem[]; mode: 'copy' | 'move' } | null;
+  defaultOpenMode: 'system' | 'browser';
 }
 
 export const FileContextMenu: React.FC<FileContextMenuProps> = ({
@@ -20,11 +21,15 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   item,
   onClose,
   onAction,
-  pendingMove
+  pendingMove,
+  defaultOpenMode
 }) => {
   const isFolderItem = item ? isFolder(item) : false;
 
   const actions = [
+    { id: 'open', label: 'Open', icon: defaultOpenMode === 'browser' ? <ExternalLink size={14} /> : <Monitor size={14} />, hidden: !item || isFolderItem },
+    { id: 'open_browser', label: 'Open in Browser', icon: <ExternalLink size={14} />, hidden: !item || isFolderItem || defaultOpenMode === 'browser' },
+    { id: 'open_system', label: 'Open in System App', icon: <Monitor size={14} />, hidden: !item || isFolderItem || defaultOpenMode === 'system' },
     { id: 'newFolder', label: 'New Folder', icon: <FolderPlus size={14} />, hidden: item !== null },
     { id: 'rename', label: 'Rename', icon: <Edit3 size={14} />, hidden: !item },
     { id: 'copy', label: 'Copy', icon: <Copy size={14} />, hidden: !item },
@@ -45,7 +50,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
     >
       {actions.map((action, idx) => (
         <React.Fragment key={action.id}>
-           {action.id === 'download' && idx > 0 && <div className="h-px bg-zinc-800 my-1 mx-2" />}
+           {(action.id === 'newFolder' || action.id === 'download') && idx > 0 && <div className="h-px bg-zinc-800 my-1 mx-2" />}
            <button
             onClick={() => { onAction(action.id); onClose(); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2 text-[11px] font-bold uppercase tracking-widest transition-colors

@@ -39,9 +39,9 @@ impl WebDavBridge {
     }
 
     /// Starts the WebDAV server on the specified port using Axum.
-    pub async fn start(self, port: u16) -> Result<()> {
+    pub async fn start(this: Arc<Self>, port: u16) -> Result<()> {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        let bridge = Arc::new(self);
+        let bridge = this;
         
         let app = Router::new()
             .fallback(move |req: axum::extract::Request| {
@@ -54,10 +54,10 @@ impl WebDavBridge {
         println!("Folded WebDAV Bridge starting at http://{}", addr);
         
         let listener = tokio::net::TcpListener::bind(addr).await
-            .map_err(|e| anyhow!("Failed to bind WebDAV port {}: {}", port, e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to bind WebDAV port {}: {}", port, e))?;
             
-        axum::serve(listener, app).await
-            .map_err(|e| anyhow!("WebDAV server error: {}", e))?;
+        let server = axum::serve(listener, app.into_make_service());
+        server.await.map_err(|e| anyhow::anyhow!("WebDAV server error: {}", e))?;
         
         Ok(())
     }

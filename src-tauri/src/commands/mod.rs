@@ -4,6 +4,7 @@ pub mod notes;
 pub mod cluster;
 pub mod system;
 pub mod settings;
+pub mod cache;
 
 #[macro_export]
 macro_rules! generate_handler {
@@ -27,6 +28,8 @@ macro_rules! generate_handler {
             $crate::commands::fs::rename_item,
             $crate::commands::fs::move_item,
             $crate::commands::fs::copy_item,
+            $crate::commands::fs::global_search,
+            $crate::commands::fs::get_item_path,
             
             $crate::commands::notes::get_notes,
             $crate::commands::notes::update_note,
@@ -57,7 +60,11 @@ macro_rules! generate_handler {
             
             $crate::commands::settings::get_setting,
             $crate::commands::settings::update_setting,
-            $crate::commands::settings::purge_local_cache
+            $crate::commands::settings::purge_local_cache,
+
+            $crate::commands::cache::get_cache_stats,
+            $crate::commands::cache::clear_file_cache,
+            $crate::commands::cache::evict_cache
         ]
     };
 }

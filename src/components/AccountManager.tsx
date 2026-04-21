@@ -134,11 +134,9 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
                      <span className="text-xl font-black text-white leading-none">{formatBytes(acc.used_bytes)}</span>
                      <span className="text-[10px] font-bold text-zinc-700 mb-0.5 uppercase tracking-tighter">indexed</span>
                    </div>
-                   <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-1000 ease-out" 
-                        style={{ width: `${Math.min(100, (acc.used_bytes / (1024 * 1024 * 1024 * 10)) * 100)}%` }}
-                      ></div>
+                   <div className="flex items-center gap-1.5 mt-2 overflow-hidden">
+                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                     <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest truncate">Live cloud indexing active</span>
                    </div>
                 </div>
 
@@ -148,8 +146,19 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
                      <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Last Index Action</span>
                    </div>
                    <div className="flex flex-col">
-                     <span className="text-xs font-bold text-zinc-400 mb-1">{acc.last_indexed_at ? formatDate(acc.last_indexed_at) : 'Not indexed yet'}</span>
-                     <span className="text-[9px] font-medium text-zinc-600 uppercase tracking-widest leading-none">Full deep scan sync completed</span>
+                     <span className={`text-xs font-bold mb-1 ${acc.last_indexed_at ? 'text-zinc-400' : 'text-zinc-600 italic'}`}>
+                       {acc.last_indexed_at ? formatDate(acc.last_indexed_at) : 'Not indexed yet'}
+                     </span>
+                     {acc.last_indexed_at && (
+                       <span className="text-[9px] font-medium text-emerald-500/80 uppercase tracking-widest leading-none">
+                         Full deep scan sync completed
+                       </span>
+                     )}
+                     {!acc.last_indexed_at && (
+                       <span className="text-[9px] font-medium text-zinc-600 uppercase tracking-widest leading-none animate-pulse">
+                         Initial metadata crawl pending
+                       </span>
+                     )}
                    </div>
                 </div>
               </div>
@@ -188,9 +197,9 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-2">
               <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Storage Capacity</h4>
-              <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
-                Telegram provides <span className="text-zinc-400">unlimited storage</span> for Saved Messages. Folded leverages this to index all your cloud assets.
-              </p>
+                <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
+                  Telegram provides <span className="text-zinc-400">capacity-free storage</span> for Saved Messages. Folded indexes your assets without enforcing any artificial limits on your total cloud volume.
+                </p>
             </div>
             <div className="space-y-2">
               <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Individual File Limits</h4>

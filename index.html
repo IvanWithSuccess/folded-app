@@ -7,6 +7,14 @@
     <title>Folded Cloud</title>
   </head>
   <body style="margin:0;padding:0;background:#09090b;color:#fafafa;">
+    <script>
+      window.addEventListener('error', function(event) {
+        document.body.innerHTML += '<div style="position:fixed;top:0;left:0;z-index:9999;background:red;color:white;padding:20px;font-family:monospace;width:100%;height:100vh;overflow:auto;"><h3>Runtime Error</h3><p>' + event.error?.message + '</p><pre>' + event.error?.stack + '</pre></div>';
+      });
+      window.addEventListener('unhandledrejection', function(event) {
+        document.body.innerHTML += '<div style="position:fixed;top:0;left:0;z-index:9999;background:orange;color:black;padding:20px;font-family:monospace;width:100%;height:100vh;overflow:auto;"><h3>Promise Rejection</h3><p>' + event.reason?.message + '</p><pre>' + event.reason?.stack + '</pre></div>';
+      });
+    </script>
     <div id="root" style="width:100%;height:100%;background:#09090b;"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

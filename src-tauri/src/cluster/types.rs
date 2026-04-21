@@ -12,9 +12,11 @@ pub struct ProgressPayload {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChunkMeta {
+    pub chunk_id: String,      // Unique UUID v4 for this chunk
     pub account_id: String,
     pub part_index: usize,
     pub message_id: i64,
+    pub size_bytes: u64,       // Actual byte size of this chunk
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

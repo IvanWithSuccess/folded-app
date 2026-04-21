@@ -48,12 +48,17 @@ impl MetadataCache {
             )"
         ).execute(&pool).await?;
 
+        // Drop and recreate chunks with new schema (chunk_id + size_bytes for resilient reassembly)
+        sqlx::query("DROP TABLE IF EXISTS chunks").execute(&pool).await?;
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS chunks (
                 file_id TEXT NOT NULL,
+                chunk_id TEXT NOT NULL,
                 account_id TEXT NOT NULL,
                 message_id INTEGER NOT NULL,
                 part_index INTEGER NOT NULL,
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (file_id, chunk_id),
                 FOREIGN KEY(file_id) REFERENCES files(id)
             )"
         ).execute(&pool).await?;
@@ -89,7 +94,18 @@ impl MetadataCache {
                 account_id TEXT PRIMARY KEY,
                 last_forward_id INTEGER,
                 last_backward_id INTEGER,
-                last_indexed_at INTEGER
+                last_indexed_at INTEGER,
+                last_sync_message_id INTEGER DEFAULT 0
+            )"
+        ).execute(&pool).await?;
+
+        // File cache table: tracks locally cached files for fast re-open
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS file_cache (
+                file_id TEXT PRIMARY KEY,
+                path_on_disk TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                last_accessed_at INTEGER NOT NULL
             )"
         ).execute(&pool).await?;
 
@@ -119,6 +135,9 @@ impl MetadataCache {
         let _ = sqlx::query("ALTER TABLE notes ADD COLUMN attachment_ids TEXT").execute(&self.pool).await;
         let _ = sqlx::query("ALTER TABLE notes ADD COLUMN peer_id INTEGER").execute(&self.pool).await;
         let _ = sqlx::query("ALTER TABLE notes ADD COLUMN from_self INTEGER DEFAULT 1").execute(&self.pool).await;
+
+        // Delta sync: track last known message ID per account
+        let _ = sqlx::query("ALTER TABLE account_sync_state ADD COLUMN last_sync_message_id INTEGER DEFAULT 0").execute(&self.pool).await;
         
         Ok(())
     }
@@ -140,11 +159,13 @@ impl MetadataCache {
             .execute(&mut *tx).await?;
 
         for chunk in &file.chunks {
-            sqlx::query("INSERT INTO chunks (file_id, account_id, message_id, part_index) VALUES (?, ?, ?, ?)")
+            sqlx::query("INSERT OR REPLACE INTO chunks (file_id, chunk_id, account_id, message_id, part_index, size_bytes) VALUES (?, ?, ?, ?, ?, ?)")
                 .bind(&file.id)
+                .bind(&chunk.chunk_id)
                 .bind(&chunk.account_id)
                 .bind(chunk.message_id)
                 .bind(chunk.part_index as i64)
+                .bind(chunk.size_bytes as i64)
                 .execute(&mut *tx).await?;
         }
         
@@ -177,14 +198,18 @@ impl MetadataCache {
 
             let mut chunks = Vec::new();
             for c_row in chunk_rows {
+                let chunk_id: String = c_row.try_get("chunk_id").unwrap_or_default();
                 let account_id: String = c_row.get("account_id");
                 let message_id: i64 = c_row.get("message_id");
                 let part_index: i64 = c_row.get("part_index");
+                let size_bytes: i64 = c_row.try_get("size_bytes").unwrap_or(0);
 
                 chunks.push(crate::cluster::ChunkMeta {
+                    chunk_id,
                     account_id,
                     message_id,
                     part_index: part_index as usize,
+                    size_bytes: size_bytes as u64,
                 });
             }
 
@@ -257,9 +282,11 @@ impl MetadataCache {
             let part_index: i64 = c_row.get("part_index");
 
             chunks.push(crate::cluster::ChunkMeta {
+                chunk_id: c_row.try_get("chunk_id").unwrap_or_default(),
                 account_id,
                 message_id,
                 part_index: part_index as usize,
+                size_bytes: c_row.try_get::<i64, _>("size_bytes").unwrap_or(0) as u64,
             });
         }
 
@@ -313,9 +340,11 @@ impl MetadataCache {
             let part_index: i64 = c_row.get("part_index");
 
             chunks.push(crate::cluster::ChunkMeta {
+                chunk_id: c_row.try_get("chunk_id").unwrap_or_default(),
                 account_id,
                 message_id,
                 part_index: part_index as usize,
+                size_bytes: c_row.try_get::<i64, _>("size_bytes").unwrap_or(0) as u64,
             });
         }
 
@@ -611,6 +640,91 @@ impl MetadataCache {
             }
         }
         Ok(final_name)
+    }
+
+    pub async fn search_files_global(&self, query: &str) -> Result<Vec<FileManifest>> {
+        let sql_query = format!("%{}%", query.to_lowercase());
+        
+        // 1. Search Files
+        let file_rows = sqlx::query(
+            "SELECT id, name, size, chunk_size, folder_id, account_id, storage_hub_id, is_external, created_at 
+             FROM files 
+             WHERE LOWER(name) LIKE ? 
+             ORDER BY created_at DESC LIMIT 50"
+        )
+        .bind(&sql_query)
+        .fetch_all(&self.pool).await?;
+        
+        let mut results = Vec::new();
+        for row in file_rows {
+            use sqlx::Row;
+            results.push(FileManifest {
+                id: row.get("id"),
+                name: row.get("name"),
+                total_size: row.get::<i64, _>("size") as u64,
+                chunk_size: row.get::<i64, _>("chunk_size") as u64,
+                chunks: Vec::new(), 
+                folder_id: row.get("folder_id"),
+                account_id: row.get("account_id"),
+                storage_hub_id: row.get("storage_hub_id"),
+                storage_hub_access_hash: None,
+                is_external: row.get::<i8, _>("is_external") != 0,
+                created_at: row.get("created_at"),
+            });
+        }
+
+        // 2. Search Folders
+        let folder_rows = sqlx::query(
+            "SELECT id, name, parent_id, account_id, created_at 
+             FROM folders 
+             WHERE LOWER(name) LIKE ? 
+             ORDER BY created_at DESC LIMIT 50"
+        )
+        .bind(&sql_query)
+        .fetch_all(&self.pool).await?;
+
+        for row in folder_rows {
+            use sqlx::Row;
+            results.push(FileManifest {
+                id: row.get("id"),
+                name: row.get("name"),
+                total_size: 0, // Folders don't have aggregated size in this table
+                chunk_size: 0,
+                chunks: Vec::new(),
+                folder_id: row.get("parent_id"), // Parent of the found folder
+                account_id: row.get("account_id"),
+                storage_hub_id: None,
+                storage_hub_access_hash: None,
+                is_external: false,
+                created_at: row.get("created_at"),
+            });
+        }
+
+        log::info!("Global search for '{}' returned {} items (files+folders)", query, results.len());
+        Ok(results)
+    }
+
+    pub async fn get_folder_path_ids(&self, folder_id: &str) -> Result<Vec<String>> {
+        let mut current_id = folder_id.to_string();
+        let mut path = vec![current_id.clone()];
+        
+        loop {
+            let parent: Option<Option<String>> = sqlx::query_scalar("SELECT parent_id FROM folders WHERE id = ?")
+                .bind(&current_id)
+                .fetch_optional(&self.pool).await?;
+            
+            match parent {
+                Some(Some(pid)) if !pid.is_empty() => {
+                    path.push(pid.clone());
+                    current_id = pid;
+                }
+                _ => break, // Reached root or no more parents
+            }
+        }
+        
+        // Reverse to get from Root to Leaf
+        path.reverse();
+        Ok(path)
     }
 
     pub async fn get_notes(&self) -> Result<Vec<NoteInfo>> {
@@ -947,6 +1061,115 @@ impl MetadataCache {
         }
 
         tx.commit().await?;
+        Ok(())
+    }
+
+    // ─── File Cache Methods ────────────────────────────────────────────────────
+
+    /// Returns the local path if the file is in the disk cache and still exists.
+    #[allow(dead_code)]
+    pub async fn get_cached_file(&self, file_id: &str) -> Option<String> {
+        let row = sqlx::query("SELECT path_on_disk FROM file_cache WHERE file_id = ?")
+            .bind(file_id)
+            .fetch_optional(&self.pool)
+            .await
+            .ok()
+            .flatten()?;
+
+        let path: String = row.get("path_on_disk");
+        if std::path::Path::new(&path).exists() {
+            let now = chrono::Utc::now().timestamp();
+            let _ = sqlx::query("UPDATE file_cache SET last_accessed_at = ? WHERE file_id = ?")
+                .bind(now).bind(file_id).execute(&self.pool).await;
+            Some(path)
+        } else {
+            let _ = sqlx::query("DELETE FROM file_cache WHERE file_id = ?")
+                .bind(file_id).execute(&self.pool).await;
+            None
+        }
+    }
+
+    /// Records a freshly downloaded file into the local disk cache.
+    pub async fn record_cached_file(&self, file_id: &str, path: &str, size_bytes: u64) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        sqlx::query(
+            "INSERT OR REPLACE INTO file_cache (file_id, path_on_disk, size_bytes, last_accessed_at) VALUES (?, ?, ?, ?)"
+        )
+        .bind(file_id)
+        .bind(path)
+        .bind(size_bytes as i64)
+        .bind(now)
+        .execute(&self.pool).await?;
+        Ok(())
+    }
+
+    /// Evicts LRU files until total cache size <= limit_bytes. Returns paths of deleted files.
+    pub async fn evict_cache_to_limit(&self, limit_bytes: u64) -> Result<Vec<String>> {
+        let total: (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size_bytes), 0) FROM file_cache")
+            .fetch_one(&self.pool).await?;
+        let mut current_size = total.0 as u64;
+
+        let mut evicted = Vec::new();
+        while current_size > limit_bytes {
+            // Get the least recently accessed entry
+            let row: Option<(String, String, i64)> = sqlx::query_as(
+                "SELECT file_id, path_on_disk, size_bytes FROM file_cache ORDER BY last_accessed_at ASC LIMIT 1"
+            ).fetch_optional(&self.pool).await?;
+
+            match row {
+                None => break,
+                Some((fid, path, size)) => {
+                    let _ = std::fs::remove_file(&path);
+                    sqlx::query("DELETE FROM file_cache WHERE file_id = ?")
+                        .bind(&fid).execute(&self.pool).await?;
+                    evicted.push(path);
+                    current_size = current_size.saturating_sub(size as u64);
+                }
+            }
+        }
+        Ok(evicted)
+    }
+
+    /// Returns total number of cached files and their total disk usage in bytes.
+    pub async fn get_cache_stats(&self) -> Result<(u64, u64)> {
+        let row: (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM file_cache"
+        ).fetch_one(&self.pool).await?;
+        Ok((row.0 as u64, row.1 as u64))
+    }
+
+    /// Deletes all entries from the file_cache table (and their files on disk).
+    pub async fn clear_file_cache(&self) -> Result<()> {
+        let rows: Vec<(String,)> = sqlx::query_as("SELECT path_on_disk FROM file_cache")
+            .fetch_all(&self.pool).await?;
+        for (path,) in rows {
+            let _ = std::fs::remove_file(&path);
+        }
+        sqlx::query("DELETE FROM file_cache").execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // ─── Delta Sync Methods ────────────────────────────────────────────────────
+
+    /// Gets the highest message_id we've already seen for this account.
+    #[allow(dead_code)]
+    pub async fn get_last_sync_message_id(&self, account_id: &str) -> Result<i64> {
+        let row: Option<(i64,)> = sqlx::query_as(
+            "SELECT last_sync_message_id FROM account_sync_state WHERE account_id = ?"
+        ).bind(account_id).fetch_optional(&self.pool).await?;
+        Ok(row.map(|(id,)| id).unwrap_or(0))
+    }
+
+    /// Persists the highest seen message_id so the next sync can skip older messages.
+    #[allow(dead_code)]
+    pub async fn set_last_sync_message_id(&self, account_id: &str, message_id: i64) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO account_sync_state (account_id, last_sync_message_id) VALUES (?, ?)
+             ON CONFLICT(account_id) DO UPDATE SET last_sync_message_id = excluded.last_sync_message_id"
+        )
+        .bind(account_id)
+        .bind(message_id)
+        .execute(&self.pool).await?;
         Ok(())
     }
 }

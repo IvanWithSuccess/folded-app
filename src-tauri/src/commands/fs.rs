@@ -180,3 +180,31 @@ pub async fn copy_item(
         _ => Err("Unknown item type".to_string()),
     }
 }
+
+#[tauri::command]
+pub async fn global_search(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    query: String,
+) -> Result<Vec<FileManifest>, String> {
+    cache_state.search_files_global(&query).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_item_path(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    item_id: String,
+) -> Result<Vec<String>, String> {
+    // Check if it's a file first to get its parent directory
+    let folder_id = if let Some(file) = cache_state.get_file_by_id(&item_id).await.map_err(|e| e.to_string())? {
+        file.folder_id
+    } else {
+        // If not a file, assume it's a folder ID
+        Some(item_id)
+    };
+
+    if let Some(fid) = folder_id {
+        cache_state.get_folder_path_ids(&fid).await.map_err(|e| e.to_string())
+    } else {
+        Ok(vec![]) // Root
+    }
+}

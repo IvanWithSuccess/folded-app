@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { 
   Settings, Folder, RefreshCw, HardDrive, ShieldAlert,
-  Save, AlertTriangle, Monitor, Webhook, AppWindow
+  Save, AlertTriangle, Monitor, Webhook, AppWindow, Database, Zap
 } from 'lucide-react';
 
 interface AppSettings {
@@ -14,6 +14,10 @@ interface AppSettings {
   closeToTray: boolean;
   showTrayIcon: boolean;
   launchOnStartup: boolean;
+  mountDrive: boolean;
+  defaultOpenMode: 'system' | 'browser';
+  cacheMaxMb: string;     // Max file cache size in MB
+  parallelWorkers: string; // Parallel download threads
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -23,16 +27,23 @@ const DEFAULT_SETTINGS: AppSettings = {
   webdavPort: '9876',
   closeToTray: true,
   showTrayIcon: true,
-  launchOnStartup: false
+  launchOnStartup: false,
+  mountDrive: true,
+  defaultOpenMode: 'system',
+  cacheMaxMb: '1024', // 1 GB default
+  parallelWorkers: '3',
 };
 
 export const SettingsView: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cacheStats, setCacheStats] = useState<{ file_count: number; total_bytes: number } | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => {
     loadSettings();
+    loadCacheStats();
   }, []);
 
   const loadSettings = async () => {
@@ -50,6 +61,10 @@ export const SettingsView: React.FC = () => {
       const ctTray = await getSet('close_to_tray', 'true');
       const stIcon = await getSet('show_tray_icon', 'true');
       const startOnBoot = await getSet('launch_on_startup', 'false');
+      const shouldMount = await getSet('mount_drive', 'true');
+      const openMode = await getSet('default_open_mode', 'system') as 'system' | 'browser';
+      const cMaxMb = await getSet('cache_max_mb', '1024');
+      const pWorkers = await getSet('parallel_workers', '3');
 
       setSettings({
         downloadDirectory: dlDir,
@@ -58,7 +73,11 @@ export const SettingsView: React.FC = () => {
         webdavPort: wPort,
         closeToTray: ctTray === 'true',
         showTrayIcon: stIcon === 'true',
-        launchOnStartup: startOnBoot === 'true'
+        launchOnStartup: startOnBoot === 'true',
+        mountDrive: shouldMount === 'true',
+        defaultOpenMode: openMode,
+        cacheMaxMb: cMaxMb,
+        parallelWorkers: pWorkers,
       });
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -80,6 +99,12 @@ export const SettingsView: React.FC = () => {
       await invoke('update_setting', { key: 'close_to_tray', value: updated.closeToTray ? 'true' : 'false' });
       await invoke('update_setting', { key: 'show_tray_icon', value: updated.showTrayIcon ? 'true' : 'false' });
       await invoke('update_setting', { key: 'launch_on_startup', value: updated.launchOnStartup ? 'true' : 'false' });
+      await invoke('update_setting', { key: 'mount_drive', value: updated.mountDrive ? 'true' : 'false' });
+      await invoke('update_setting', { key: 'default_open_mode', value: updated.defaultOpenMode });
+      await invoke('update_setting', { key: 'cache_max_mb', value: updated.cacheMaxMb });
+      await invoke('update_setting', { key: 'parallel_workers', value: updated.parallelWorkers });
+      // Apply cache eviction immediately if limit decreased
+      await invoke('evict_cache', { limitMb: parseInt(updated.cacheMaxMb) || 1024 });
     } catch (e) {
       console.error('Failed to save settings:', e);
     } finally {
@@ -107,13 +132,42 @@ export const SettingsView: React.FC = () => {
         try {
             await invoke('purge_local_cache');
             alert('Database wiped successfully. Please restart the application to begin a fresh sync.');
-            // Optionally reload the window
             window.location.reload();
         } catch (e) {
             console.error('Failed to wipe database:', e);
             alert(`Failed to wipe database: ${e}`);
         }
     }
+  };
+
+  const loadCacheStats = async () => {
+    try {
+      const stats = await invoke<{ file_count: number; total_bytes: number }>('get_cache_stats');
+      setCacheStats(stats);
+    } catch (e) {
+      console.error('Failed to load cache stats:', e);
+    }
+  };
+
+  const handleClearFileCache = async () => {
+    if (!window.confirm('Clear the local file cache? Files will be re-downloaded on next access.')) return;
+    setClearingCache(true);
+    try {
+      await invoke('clear_file_cache');
+      await loadCacheStats();
+    } catch (e) {
+      alert(`Failed to clear cache: ${e}`);
+    } finally {
+      setClearingCache(false);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
   if (loading) {
@@ -174,6 +228,48 @@ export const SettingsView: React.FC = () => {
            </div>
         </section>
 
+        {/* System Integration */}
+        <section className="flex flex-col gap-4">
+           <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+             <HardDrive size={12} />
+             System Integration
+           </h3>
+           <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[32px] p-6 space-y-6">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                 <div className="flex flex-col w-full sm:max-w-[70%]">
+                    <span className="text-sm font-bold text-white mb-1">Expose as Local Drive</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">Mount your Telegram Cloud as a virtual volume in Finder or File Explorer. Recommended for native file streaming.</span>
+                 </div>
+                 <label className="relative inline-flex items-center cursor-pointer self-start sm:self-auto">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={settings.mountDrive}
+                      onChange={(e) => handleSave({ mountDrive: e.target.checked })}
+                    />
+                    <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 peer-checked:after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                 </label>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                 <div className="flex flex-col w-full sm:max-w-[70%]">
+                    <span className="text-sm font-bold text-white mb-1">Default File Opening Mode</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">Choose whether to open files in your default system application or in a web browser.</span>
+                 </div>
+                 <select 
+                   value={settings.defaultOpenMode}
+                   onChange={(e) => handleSave({ defaultOpenMode: e.target.value as 'system' | 'browser' })}
+                   className="bg-zinc-800 text-white text-[11px] font-bold uppercase tracking-widest px-4 py-2 rounded-xl border border-zinc-700 outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+                 >
+                    <option value="system">System App</option>
+                    <option value="browser">Web Browser</option>
+                 </select>
+              </div>
+
+           </div>
+        </section>
+
         {/* Window Management */}
         <section className="flex flex-col gap-4">
            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -184,8 +280,8 @@ export const SettingsView: React.FC = () => {
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-900/50 pb-6 gap-4">
                  <div className="flex flex-col w-full sm:max-w-[70%]">
-                    <span className="text-sm font-bold text-white mb-1">Close to Tray</span>
-                    <span className="text-[11px] text-zinc-500 font-medium">When you close the main window, the application will continue running in the system tray. Use the tray menu to completely quit.</span>
+                    <span className="text-sm font-bold text-white mb-1">Keep App Running in Background</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">When you close the main window, the application will stay active for background tasks. If disabled, closing the window will exit and terminate the app completely.</span>
                  </div>
                  <label className="relative inline-flex items-center cursor-pointer self-start sm:self-auto">
                     <input 
@@ -201,7 +297,7 @@ export const SettingsView: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-900/50 pb-6 gap-4">
                  <div className="flex flex-col w-full sm:max-w-[70%]">
                     <span className="text-sm font-bold text-white mb-1">Show System Tray Icon</span>
-                    <span className="text-[11px] text-zinc-500 font-medium">Show the Folded Cloud icon in your operating system's status bar or tray area. Required for "Close to Tray".</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">Show the Folded Cloud icon in your operating system's status bar. Useful for controlling and reopening the app when it is running in the background.</span>
                  </div>
                  <label className="relative inline-flex items-center cursor-pointer self-start sm:self-auto">
                     <input 
@@ -308,6 +404,101 @@ export const SettingsView: React.FC = () => {
            </div>
         </section>
 
+        {/* Local Cache */}
+        <section className="flex flex-col gap-4">
+           <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+             <Database size={12} />
+             Local File Cache
+           </h3>
+           <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[32px] p-6 space-y-6">
+
+              {/* Cache size limit */}
+              <div className="flex flex-col gap-6 border-b border-zinc-900/50 pb-8">
+                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex flex-col w-full sm:max-w-[70%]">
+                       <span className="text-sm font-bold text-white mb-1">Cache Size Limit</span>
+                       <span className="text-[11px] text-zinc-500 font-medium">Temporary local storage for fast file access. Oldest files are deleted when this limit is reached.</span>
+                    </div>
+                    <div className="text-lg font-black text-blue-500 tabular-nums">
+                       {Math.round(parseInt(settings.cacheMaxMb) / 1024)} <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">GB</span>
+                    </div>
+                 </div>
+                 <div className="px-2">
+                    <input 
+                      type="range"
+                      min="0"
+                      max="102400" // 100 GB in MB
+                      step="1024"  // 1 GB steps
+                      value={settings.cacheMaxMb}
+                      onChange={(e) => setSettings({ ...settings, cacheMaxMb: e.target.value })}
+                      onMouseUp={() => handleSave({ cacheMaxMb: settings.cacheMaxMb })}
+                      className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    <div className="flex justify-between mt-2 text-[9px] font-black text-zinc-700 uppercase tracking-widest">
+                       <span>Disabled</span>
+                       <span>25 GB</span>
+                       <span>50 GB</span>
+                       <span>75 GB</span>
+                       <span>100 GB</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Cache stats + clear */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                 <div className="flex flex-col">
+                    <span className="text-sm font-bold text-white mb-1">Downloaded File Cache</span>
+                    {cacheStats ? (
+                      <span className="text-[11px] text-zinc-500 font-medium">
+                        Storing {cacheStats.file_count} recent file{cacheStats.file_count !== 1 ? 's' : ''} · {formatBytes(cacheStats.total_bytes)} used
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-zinc-600 font-medium">Loading stats...</span>
+                    )}
+                 </div>
+                 <button
+                   onClick={handleClearFileCache}
+                   disabled={clearingCache || (cacheStats?.total_bytes ?? 0) === 0}
+                   className="w-full sm:w-auto px-5 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 hover:text-white font-black text-[10px] rounded-xl uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-zinc-800/50"
+                 >
+                    <HardDrive size={12} />
+                    {clearingCache ? 'Purging Files...' : 'Clear File Cache'}
+                 </button>
+              </div>
+
+           </div>
+        </section>
+
+        {/* Performance */}
+        <section className="flex flex-col gap-4">
+           <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+             <Zap size={12} />
+             Performance
+           </h3>
+           <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[32px] p-6 space-y-6">
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                 <div className="flex flex-col w-full sm:max-w-[60%]">
+                    <span className="text-sm font-bold text-white mb-1">Parallel Download Workers</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">Number of simultaneous chunk downloads. Higher values speed up large file transfers but use more bandwidth.</span>
+                 </div>
+                 <div className="flex items-center gap-3 self-start sm:self-auto">
+                    <select
+                      value={settings.parallelWorkers}
+                      onChange={(e) => handleSave({ parallelWorkers: e.target.value })}
+                      className="bg-zinc-900 border border-zinc-800 text-white text-xs font-bold rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 transition-all"
+                    >
+                      <option value="1">1 (Safe)</option>
+                      <option value="3">3 (Default)</option>
+                      <option value="6">6 (Fast)</option>
+                      <option value="10">10 (Max)</option>
+                    </select>
+                 </div>
+              </div>
+
+           </div>
+        </section>
+
         {/* Danger Zone */}
         <section className="flex flex-col gap-4 mt-8">
            <h3 className="text-[10px] font-black text-red-500/80 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -318,12 +509,12 @@ export const SettingsView: React.FC = () => {
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                  <div className="flex flex-col w-full sm:max-w-[70%]">
-                    <span className="text-sm font-bold text-red-400 mb-1">Purge Local Metadata Cache</span>
-                    <span className="text-[11px] text-zinc-500 font-medium">Clears all local databases. Warning: Your cloud files will remain safe in Telegram, but the app will need to perform a complete deep scan upon restart.</span>
+                    <span className="text-sm font-bold text-red-400 mb-1">Hard Sync Reset (Full Metadata Wipe)</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">Deletes the local SQLite database containing file indexes and sync state. Your files in Telegram are safe, but a full re-scan will be required.</span>
                  </div>
                  <button 
                    onClick={clearCache}
-                   className="w-full sm:w-auto px-6 py-2.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white font-bold text-xs rounded-xl uppercase tracking-widest transition-all"
+                   className="w-full sm:w-auto px-6 py-2.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white font-black text-[10px] rounded-xl uppercase tracking-[0.1em] transition-all"
                  >
                     Wipe Database
                  </button>

@@ -71,13 +71,22 @@ function App() {
     };
   }, [setActiveTask]);
 
-  // Update online status based on accounts
+  // Update online status based on accounts AND actual connectivity
   useEffect(() => {
-    if (accounts.length > 0) {
-      setNodeStatus('ONLINE');
-    } else {
-      setNodeStatus('OFFLINE');
-    }
+    const updateStatus = () => {
+      const isOnline = navigator.onLine && accounts.length > 0;
+      setNodeStatus(isOnline ? 'ONLINE' : 'OFFLINE');
+    };
+
+    updateStatus();
+
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+    };
   }, [accounts, setNodeStatus]);
 
   // Global Overlay States (Startup, Auth, Sync, Onboarding)
@@ -85,7 +94,7 @@ function App() {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#09090b] text-zinc-600">
         <Loader2 className="animate-spin mb-4" size={32} />
-        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Initializing Folded Node</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Establishing Network Connection</span>
       </div>
     );
   }
@@ -151,33 +160,7 @@ function App() {
            )}
         </AnimateContent>
         
-        {/* Dynamic Status Dashboard */}
-        <div 
-          className="fixed bottom-5 right-5 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-zinc-800 shadow-2xl z-50 transition-all duration-500 ease-in-out"
-          style={{ 
-            backgroundColor: '#111113',
-            minWidth: activeTask ? '200px' : '90px'
-          }}
-        >
-          {/* Status Dot */}
-          <div className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${
-            nodeStatus === 'OFFLINE' ? 'bg-red-500' : 
-            activeTask ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500 animate-pulse'
-          }`}></div>
 
-          {/* Label */}
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest leading-none mb-0.5">
-              Node Status
-            </span>
-            <span className="text-[10px] font-bold text-zinc-200 tracking-wide uppercase truncate max-w-[200px]">
-              {activeTask 
-                ? `${activeTask} (${taskProgress}%)` 
-                : nodeStatus === 'ONLINE' ? 'Online' : 'Offline'
-              }
-            </span>
-          </div>
-        </div>
       </main>
     </div>
   );

@@ -21,10 +21,19 @@ pub async fn cluster_download_file(
         .ok_or_else(|| format!("File {} not found in metadata", file_id))?;
 
     let dest = std::path::PathBuf::from(&dest_path);
-    cluster_state
+    match cluster_state
         .download_file(manifest, dest, Arc::clone(&session_state), Some(app))
-        .await
-        .map_err(|e| e.to_string())
+        .await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("not found") || err_msg.contains("no media") {
+                    log::warn!("File {} missing in Telegram, removing from metadata.", file_id);
+                    let _ = cache_state.delete_file(&file_id).await;
+                }
+                Err(err_msg)
+            }
+        }
 }
 
 #[tauri::command]
@@ -43,12 +52,22 @@ pub async fn cluster_download_to_tmp(
     let _ = std::fs::create_dir_all(&tmp_dir);
     let dest = tmp_dir.join(&manifest.name);
 
-    cluster_state
-        .download_file(manifest, dest.clone(), Arc::clone(&session_state), Some(app))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(dest.to_string_lossy().to_string())
+    match cluster_state
+        .download_file(manifest.clone(), dest.clone(), Arc::clone(&session_state), Some(app))
+        .await {
+            Ok(_) => {
+                let _ = cache_state.record_cached_file(&manifest.id, &dest.to_string_lossy(), manifest.total_size).await;
+                Ok(dest.to_string_lossy().to_string())
+            },
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("not found") || err_msg.contains("no media") {
+                    log::warn!("File {} missing in Telegram during tmp open, removing from metadata.", file_id);
+                    let _ = cache_state.delete_file(&file_id).await;
+                }
+                Err(err_msg)
+            }
+        }
 }
 
 #[tauri::command]

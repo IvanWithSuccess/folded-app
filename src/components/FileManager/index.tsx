@@ -14,14 +14,19 @@ import { FileModals } from './FileModals';
 import { FileContextMenu } from './FileContextMenu';
 import { ErrorBoundary } from '../ErrorBoundary';
 
+import { SearchResults } from './SearchResults';
+
 interface FileManagerProps {
   category?: string;
 }
 
 export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
-  const { activeAccountId, isSyncing, setIsSyncing } = useAppStore();
+  const { activeAccountId, setActiveAccountId, accounts, isSyncing, setIsSyncing } = useAppStore();
   const explorer = useFileExplorer();
+  const [defaultOpenMode, setDefaultOpenMode] = useState<'system' | 'browser'>('system');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FileManifest[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [inspectItem, setInspectItem] = useState<SelectableItem | null>(null);
   const prevSyncing = useRef(false);
   
@@ -43,6 +48,53 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     setIsLoading: setIsSyncing
   });
 
+  // Global Search logic
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await invoke<FileManifest[]>('global_search', { query: searchQuery });
+        setSearchResults(results);
+      } catch (e) {
+        console.error('Search failed:', e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleReveal = async (item: FileManifest) => {
+    try {
+      // 1. Get the path IDs from backend
+      const pathIds = await invoke<string[]>('get_item_path', { itemId: item.id });
+      
+      // 2. Clear Search
+      setSearchQuery('');
+      
+      // 3. Switch Account in Store (Sidebar will update)
+      if (item.account_id && item.account_id !== activeAccountId) {
+        setActiveAccountId(item.account_id!);
+      }
+      
+      // 4. Navigate Explorer
+      await explorer.navigateToItem(item.account_id || '', pathIds, item.id);
+      
+      // 5. Inspect the revealed item
+      setInspectItem(item as SelectableItem);
+    } catch (e) {
+      console.error('Reveal failed:', e);
+      alert('Failed to reveal file location');
+    }
+  };
+
   // Auto-refresh when background sync finishes
   useEffect(() => {
     if (prevSyncing.current && !isSyncing) {
@@ -50,6 +102,15 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     }
     prevSyncing.current = isSyncing;
   }, [isSyncing]);
+  
+  useEffect(() => {
+    const loadDefaultMode = async () => {
+      const mode = await invoke<string | null>('get_setting', { key: 'default_open_mode' });
+      if (mode === 'browser') setDefaultOpenMode('browser');
+      else setDefaultOpenMode('system');
+    };
+    loadDefaultMode();
+  }, []);
 
   // --- Handlers ---
 
@@ -91,25 +152,58 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
       explorer.setPath(explorer.path.slice(0, colIdx + 1));
     }
   };
+  
+  const constructWebDavUrl = (item: SelectableItem, colIdx: number) => {
+    const activeAccount = accounts.find(a => a.id === activeAccountId);
+    if (!activeAccount) return null;
 
-  const handleItemDoubleClick = async (item: SelectableItem) => {
-    if (isFolder(item)) return; // folders open on single click
-    
-    // Smooth opening logic:
-    // If it's a media file or large (+10MB), stream it via WebDAV for "instant" play/view.
-    // Otherwise, do a silent download to tmp.
-    
-    const isStreamable = item.name.toLowerCase().match(/\.(mp4|mkv|mp3|wav|mov|pdf)$/i) || item.total_size > 10 * 1024 * 1024;
+    const accountName = activeAccount.username || activeAccount.id;
+    let urlPath = [encodeURIComponent(accountName)];
 
-    try {
-      // Reverted to reliable native opening via tmp download
-      const tmpPath = await invoke<string>('cluster_download_to_tmp', { fileId: item.id });
-      await invoke('open_system_file', { path: tmpPath });
-    } catch (e) {
-      console.error('Open failed:', e);
-      alert('Failed to open file: ' + e);
+    for (let i = 1; i <= colIdx; i++) {
+      const folderId = explorer.path[i];
+      const folder = explorer.columns[i - 1].folders.find(f => f.id === folderId);
+      if (folder) {
+        urlPath.push(encodeURIComponent(folder.name));
+      }
+    }
+
+    urlPath.push(encodeURIComponent(item.name));
+    return `http://localhost:9876/${urlPath.join('/')}`;
+  };
+
+  const handleOpenFile = async (item: SelectableItem, colIdx: number, modeOverride?: 'system' | 'browser') => {
+    if (isFolder(item)) return;
+    
+    const mode = modeOverride || defaultOpenMode;
+    
+    if (mode === 'browser') {
+      const url = constructWebDavUrl(item, colIdx);
+      if (url) {
+        // Open browser URL via backend open_system_file which normally uses shell::open
+        try {
+          await invoke('open_system_file', { path: url });
+        } catch (e) {
+          console.error('Failed to open browser URL:', e);
+          alert('Failed to open file in browser: ' + e);
+        }
+      }
+    } else {
+      // System opening
+      try {
+        const tmpPath = await invoke<string>('cluster_download_to_tmp', { fileId: item.id });
+        await invoke('open_system_file', { path: tmpPath });
+      } catch (e) {
+        console.error('Open failed:', e);
+        alert('Failed to open file: ' + e);
+      }
     }
   };
+
+  const handleItemDoubleClick = async (item: SelectableItem, colIdx: number) => {
+    handleOpenFile(item, colIdx);
+  };
+
 
   const handleContextMenu = (e: React.MouseEvent, item: SelectableItem | null, colIdx: number) => {
     e.preventDefault();
@@ -127,6 +221,12 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     setTargetItem(item || null);
 
     switch (actionId) {
+      case 'open_browser':
+        if (item) handleOpenFile(item, menu!.colIdx, 'browser');
+        break;
+      case 'open_system':
+        if (item) handleOpenFile(item, menu!.colIdx, 'system');
+        break;
       case 'newFolder':
         setModalInput('');
         setActiveModal('newFolder');
@@ -213,25 +313,35 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         onUploadFolder={() => handleUploadFileDesktop(true)}
       />
 
-      <div className="flex-1 flex overflow-x-auto overflow-y-hidden custom-scrollbar bg-zinc-950">
-        {explorer.columns.map((col, idx) => (
-          <FileColumn 
-            key={`${idx}-${explorer.path[idx]}`}
-            columnIdx={idx}
-            data={col}
-            selectedItems={explorer.selectedItems}
-            path={explorer.path}
-            pendingMoveItems={new Set(explorer.clipboard?.mode === 'move' ? explorer.clipboard.items.map(i => i.id) : [])}
-            dropTarget={explorer.dropTarget}
-            onItemClick={(item, colIdx, e) => handleItemClick(item, colIdx, e)}
-            onItemDoubleClick={handleItemDoubleClick}
-            onContextMenu={handleContextMenu}
-            onDragStart={(e, item) => explorer.setDragItem({ item, columnIdx: idx })}
-            onDragOver={(e, item) => explorer.setDropTarget(item?.id || explorer.path[idx])}
-            onDragLeave={() => explorer.setDropTarget(null)}
-            onDrop={() => {}} // Internal D&D can be added here
+      <div className="flex-1 flex overflow-hidden bg-zinc-950">
+        {searchQuery.trim() ? (
+          <SearchResults 
+            results={searchResults} 
+            isLoading={isSearching} 
+            onReveal={handleReveal} 
           />
-        ))}
+        ) : (
+          <div className="flex-1 flex overflow-x-auto overflow-y-hidden custom-scrollbar">
+            {explorer.columns.map((col, idx) => (
+              <FileColumn 
+                key={`${idx}-${explorer.path[idx]}`}
+                columnIdx={idx}
+                data={col}
+                selectedItems={explorer.selectedItems}
+                path={explorer.path}
+                pendingMoveItems={new Set(explorer.clipboard?.mode === 'move' ? explorer.clipboard.items.map(i => i.id) : [])}
+                dropTarget={explorer.dropTarget}
+                onItemClick={(item, colIdx, e) => handleItemClick(item, colIdx, e)}
+                onItemDoubleClick={handleItemDoubleClick}
+                onContextMenu={handleContextMenu}
+                onDragStart={(e, item) => explorer.setDragItem({ item, columnIdx: idx })}
+                onDragOver={(e, item) => explorer.setDropTarget(item?.id || explorer.path[idx])}
+                onDragLeave={() => explorer.setDropTarget(null)}
+                onDrop={() => {}} // Internal D&D can be added here
+              />
+            ))}
+          </div>
+        )}
 
         {inspectItem && (
           <ErrorBoundary name="FileInspector">
@@ -259,6 +369,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
           y={menu.y}
           item={menu.item}
           pendingMove={explorer.clipboard}
+          defaultOpenMode={defaultOpenMode}
           onClose={() => setMenu(null)}
           onAction={handleAction}
         />

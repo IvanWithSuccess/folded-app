@@ -85,7 +85,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         ? `${dest}/${item.name}` 
         : `${(dest as any).path}/${item.name}`;
       await invoke('cluster_download_file', { 
-        manifest: item, 
+        fileId: item.id, 
         destPath
       });
     } catch (e) {
@@ -159,8 +159,8 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         const p = typeof filePath === 'string' ? filePath : (filePath as any).path;
         if (isDirectory) {
           await invoke('upload_directory', {
-            dirPath: p,
-            parentFolderId: parentId,
+            directoryPath: p,
+            targetParentId: parentId,
             accountId: activeDriveId
           });
         } else {

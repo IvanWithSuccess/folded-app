@@ -15,7 +15,10 @@ export const Sidebar: React.FC = () => {
     expandedAccounts, 
     setActiveAccount, 
     setActiveView, 
-    toggleAccountExpanded 
+    toggleAccountExpanded,
+    nodeStatus,
+    activeTask,
+    taskProgress
   } = useAppStore();
 
   const handleNavClick = (accountId: string, view: ViewCategory) => {
@@ -108,20 +111,51 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Footer Info */}
-      <div className="p-4 border-t border-zinc-800 space-y-2">
+      <div className="p-4 border-t border-zinc-800 space-y-3">
         <div className="flex items-center justify-between">
-           <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Node Status</span>
-           <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-        </div>
-        <div className="bg-zinc-900/50 rounded-md p-2">
-           <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 w-[60%]"></div>
+           <div className="flex flex-col">
+              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Network Status</span>
+              <span className={`text-[10px] font-bold tracking-wide uppercase ${nodeStatus === 'OFFLINE' ? 'text-red-500' : 'text-zinc-300'}`}>
+                {nodeStatus}
+              </span>
            </div>
-           <div className="flex justify-between mt-1.5">
-              <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none">Pool Usage</span>
-              <span className="text-[8px] font-mono text-zinc-600 leading-none">6.4 GB / 10 GB</span>
-           </div>
+           <div className={`w-1.5 h-1.5 rounded-full ${
+             nodeStatus === 'OFFLINE' ? 'bg-red-500' : 
+             activeTask ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
+           }`}></div>
         </div>
+
+        <AnimatePresence>
+          {activeTask && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-zinc-950/50 border border-zinc-800/30 rounded-xl p-3 space-y-2 overflow-hidden"
+            >
+               <div className="flex justify-between items-end mb-1">
+                  <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none">
+                    Active Task
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-400 leading-none">
+                    {taskProgress}%
+                  </span>
+               </div>
+               
+               <div className="h-1.5 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${taskProgress}%` }}
+                    className="h-full bg-blue-500 transition-all duration-500"
+                  ></motion.div>
+               </div>
+               
+               <div className="text-[9px] font-medium text-zinc-400 truncate mt-2 italic">
+                 {activeTask}
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -39,8 +39,15 @@ impl ClusterFs {
 
     async fn resolve_path(&self, path: &DavPath) -> FsResult<VirtualEntry> {
         let url_str = path.as_url_string();
-        let segments: Vec<&str> = url_str.split('/').filter(|s| !s.is_empty()).collect();
+        let mut segments: Vec<&str> = url_str.split('/').filter(|s| !s.is_empty()).collect();
         
+        // Trick for macOS Finder naming: 
+        // If we mount http://127.0.0.1:9876/FoldedCloud, Finder will name the drive "FoldedCloud".
+        // We need to ignore this first segment if it matches our desired display name.
+        if segments.get(0) == Some(&"FoldedCloud") {
+            segments.remove(0);
+        }
+
         if segments.is_empty() {
             return Ok(VirtualEntry::Root);
         }
@@ -117,7 +124,7 @@ impl DavFileSystem for ClusterFs {
                 VirtualEntry::Root | VirtualEntry::AccountRoot(_) | VirtualEntry::Folder(_) => {
                     // For creating NEW files in a directory
                     if options.create || options.create_new {
-                        let name = path.file_name().ok_or(FsError::Forbidden)?;
+                        let name = path.file_name().ok_or(FsError::GeneralFailure)?;
                         let account_id = match &entry {
                             VirtualEntry::AccountRoot(acc) => acc.id.clone(),
                             VirtualEntry::Folder(f) => f.account_id.clone().unwrap_or_default(),
@@ -220,20 +227,111 @@ impl DavFileSystem for ClusterFs {
         }.boxed()
     }
 
-    fn create_dir<'a>(&'a self, _path: &'a DavPath) -> FsFuture<'a, ()> {
-        async move { Err(FsError::NotImplemented) }.boxed()
+    fn create_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
+        async move {
+            if path.as_url_string() == "/" { return Err(FsError::Forbidden); }
+            let parent_path = path.parent();
+            let name = path.file_name().ok_or(FsError::GeneralFailure)?;
+            
+            let parent_entry = self.resolve_path(&parent_path).await?;
+            let (account_id, folder_id) = match parent_entry {
+                VirtualEntry::AccountRoot(acc) => (Some(acc.id), None),
+                VirtualEntry::Folder(f) => (f.account_id, Some(f.id)),
+                _ => return Err(FsError::Forbidden), // Cannot create directory here
+            };
+            
+            self.cache.create_folder(name.to_string(), folder_id, account_id)
+                .await.map_err(|_| FsError::GeneralFailure)?;
+            
+            Ok(())
+        }.boxed()
     }
     
-    fn remove_dir<'a>(&'a self, _path: &'a DavPath) -> FsFuture<'a, ()> {
-        async move { Err(FsError::NotImplemented) }.boxed()
+    fn remove_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
+        async move {
+            let entry = self.resolve_path(path).await?;
+            if let VirtualEntry::Folder(folder) = entry {
+                // 1. Get all file manifests that need to be deleted from Telegram
+                // delete_folder_recursive returns file IDs
+                let file_ids = self.cache.delete_folder_recursive(&folder.id)
+                    .await.map_err(|_| FsError::GeneralFailure)?;
+                
+                // 2. Clean up Telegram for each file
+                for fid in file_ids {
+                    if let Ok(Some(manifest)) = self.cache.get_file_by_id(&fid).await {
+                        let _ = self.orchestrator.delete_file(manifest, Arc::clone(&self.session_manager)).await;
+                    }
+                }
+                
+                Ok(())
+            } else {
+                Err(FsError::Forbidden)
+            }
+        }.boxed()
     }
     
-    fn remove_file<'a>(&'a self, _path: &'a DavPath) -> FsFuture<'a, ()> {
-        async move { Err(FsError::NotImplemented) }.boxed()
+    fn remove_file<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
+        async move {
+            let entry = self.resolve_path(path).await?;
+            if let VirtualEntry::File(manifest) = entry {
+                // 1. Delete from Telegram
+                self.orchestrator.delete_file(manifest.clone(), Arc::clone(&self.session_manager))
+                    .await.map_err(|_| FsError::GeneralFailure)?;
+                
+                // 2. Delete from local cache
+                self.cache.delete_file(&manifest.id)
+                    .await.map_err(|_| FsError::GeneralFailure)?;
+                
+                Ok(())
+            } else {
+                Err(FsError::Forbidden)
+            }
+        }.boxed()
     }
     
-    fn rename<'a>(&'a self, _from: &'a DavPath, _to: &'a DavPath) -> FsFuture<'a, ()> {
-        async move { Err(FsError::NotImplemented) }.boxed()
+    fn rename<'a>(&'a self, from: &'a DavPath, to: &'a DavPath) -> FsFuture<'a, ()> {
+        async move {
+            let from_entry = self.resolve_path(from).await?;
+            let to_parent_path = to.parent();
+            let to_name = to.file_name().ok_or(FsError::GeneralFailure)?;
+            
+            let to_parent_entry = self.resolve_path(&to_parent_path).await?;
+            let to_folder_id = match to_parent_entry {
+                VirtualEntry::AccountRoot(_) => None,
+                VirtualEntry::Folder(f) => Some(f.id),
+                _ => return Err(FsError::Forbidden),
+            };
+
+            match from_entry {
+                VirtualEntry::File(manifest) => {
+                    // Check if it's a move or just a rename
+                    let from_folder_id = manifest.folder_id.clone();
+                    if from_folder_id != to_folder_id {
+                        self.cache.move_file(&manifest.id, to_folder_id)
+                            .await.map_err(|_| FsError::GeneralFailure)?;
+                    }
+                    if manifest.name != to_name {
+                        self.cache.rename_file(&manifest.id, to_name)
+                            .await.map_err(|_| FsError::GeneralFailure)?;
+                    }
+                }
+                VirtualEntry::Folder(folder) => {
+                    // Check if it's a move or just a rename
+                    let from_parent_id = folder.parent_id.clone();
+                    if from_parent_id != to_folder_id {
+                        self.cache.move_folder(&folder.id, to_folder_id)
+                            .await.map_err(|_| FsError::GeneralFailure)?;
+                    }
+                    if folder.name != to_name {
+                        self.cache.rename_folder(&folder.id, to_name)
+                            .await.map_err(|_| FsError::GeneralFailure)?;
+                    }
+                }
+                _ => return Err(FsError::Forbidden),
+            }
+
+            Ok(())
+        }.boxed()
     }
 }
 
