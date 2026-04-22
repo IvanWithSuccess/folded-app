@@ -7,6 +7,8 @@ import {
 import { useAppStore } from '../../store/useAppStore';
 import { ViewCategory } from '../../types/file';
 
+import appIcon from '../../assets/app-icon.png';
+
 export const Sidebar: React.FC = () => {
   const { 
     accounts, 
@@ -29,8 +31,12 @@ export const Sidebar: React.FC = () => {
   return (
     <div className="w-64 h-full flex flex-col border-r border-zinc-800 shrink-0 select-none" style={{ backgroundColor: '#0d0d0f' }}>
       {/* App Header */}
-      <div className="h-12 flex items-center px-5 border-b border-zinc-800">
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Folded Cloud</span>
+      <div className="h-14 flex items-center px-4 border-b border-zinc-800 gap-3">
+        <img src={appIcon} alt="Folded Cloud" className="w-8 h-8 rounded-lg shrink-0" />
+        <div className="flex flex-col leading-tight">
+          <span className="text-[12px] font-black text-white tracking-tight">Folded</span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">Cloud Storage</span>
+        </div>
       </div>
 
       {/* Main Navigation */}

@@ -105,8 +105,12 @@ fn main() {
                 cache_for_setup.get_setting("show_tray_icon").await.unwrap_or(Some("true".into()))
             }).unwrap_or("true".to_string()) == "true";
 
+            let tray_icon = tauri::image::Image::from_path(
+                app.path().resource_dir().unwrap().join("icons/tray-icon.png")
+            ).unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
+
             let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
