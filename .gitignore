@@ -1,23 +1,13 @@
-# Node.js
-node_modules/
+```
 dist/
-dist-ssr/
-*.local
-
-# Rust & Tauri
-src-tauri/target/
-src-tauri/gen/
-target/
-
-# IDE
+**/*.pyc
+__pycache__/
+*.log
+*.tmp
+.env
+.env.local
+*.env.*
 .vscode/
 .idea/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Env files
-.env
-.env.*
-!.env.example
+node_modules/
+```
