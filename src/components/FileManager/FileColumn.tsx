@@ -11,7 +11,7 @@ interface FileColumnProps {
   pendingMoveItems: Set<string>;
   dropTarget: string | null;
   onItemClick: (item: SelectableItem, columnIdx: number, e: React.MouseEvent) => void;
-  onItemDoubleClick: (item: SelectableItem) => void;
+  onItemDoubleClick: (item: SelectableItem, columnIdx: number) => void;
   onContextMenu: (e: React.MouseEvent, item: SelectableItem | null, columnIdx: number) => void;
   onDragStart: (e: React.DragEvent, item: SelectableItem, columnIdx: number) => void;
   onDragOver: (e: React.DragEvent, item: SelectableItem | null, columnIdx: number) => void;
@@ -60,7 +60,7 @@ export const FileColumn: React.FC<FileColumnProps> = ({
               isPendingMove={pendingMoveItems.has(folder.id)}
               isDragTarget={dropTarget === folder.id}
               onClick={(e) => onItemClick(folder, columnIdx, e)}
-              onDoubleClick={() => onItemDoubleClick(folder)}
+              onDoubleClick={() => onItemDoubleClick(folder, columnIdx)}
               onContextMenu={(e) => onContextMenu(e, folder, columnIdx)}
               onDragStart={(e) => onDragStart(e, folder, columnIdx)}
               onDragOver={(e) => onDragOver(e, folder, columnIdx)}
@@ -78,7 +78,7 @@ export const FileColumn: React.FC<FileColumnProps> = ({
               isPendingMove={pendingMoveItems.has(file.id)}
               isDragTarget={false}
               onClick={(e) => onItemClick(file, columnIdx, e)}
-              onDoubleClick={() => onItemDoubleClick(file)}
+              onDoubleClick={() => onItemDoubleClick(file, columnIdx)}
               onContextMenu={(e) => onContextMenu(e, file, columnIdx)}
               onDragStart={(e) => onDragStart(e, file, columnIdx)}
               onDragOver={(e) => onDragOver(e, file, columnIdx)}

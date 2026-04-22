@@ -21,7 +21,7 @@ interface FileManagerProps {
 }
 
 export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
-  const { activeAccountId, setActiveAccountId, accounts, isSyncing, setIsSyncing } = useAppStore();
+  const { activeAccountId, setActiveAccount, accounts, isSyncing, setIsSyncing } = useAppStore();
   const explorer = useFileExplorer();
   const [defaultOpenMode, setDefaultOpenMode] = useState<'system' | 'browser'>('system');
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,7 +81,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
       
       // 3. Switch Account in Store (Sidebar will update)
       if (item.account_id && item.account_id !== activeAccountId) {
-        setActiveAccountId(item.account_id!);
+        setActiveAccount(item.account_id!);
       }
       
       // 4. Navigate Explorer
