@@ -5,6 +5,8 @@ use crate::cluster::ClusterOrchestrator;
 use crate::cache::MetadataCache;
 use grammers_tl_types as tl;
 use grammers_client::media::Media;
+use grammers_client::message::InputMessage;
+use tauri::Manager;
 
 #[tauri::command]
 pub async fn open_system_file(path: String) -> Result<(), String> {
@@ -126,18 +128,45 @@ pub async fn get_chats(
 
 #[tauri::command]
 pub async fn share_file(
+    app_handle: tauri::AppHandle,
     session_state: State<'_, Arc<SessionManager>>,
+    cluster_state: State<'_, Arc<ClusterOrchestrator>>,
     cache_state: State<'_, Arc<MetadataCache>>,
     file_id: String,
     target_chat_id: i64,
 ) -> Result<(), String> {
     let manifest = cache_state.get_file_by_id(&file_id).await.map_err(|e| e.to_string())?
         .ok_or_else(|| "File not found".to_string())?;
+
+    // Check Telegram limits (2GB for standard users)
+    let limit_2gb = 2 * 1024 * 1024 * 1024;
+    if manifest.total_size > limit_2gb {
+        return Err(format!(
+            "File is too large to share via Telegram ({} GB). Telegram limits single file sharing to 2 GB.",
+            (manifest.total_size as f64 / (1024.0 * 1024.0 * 1024.0)).round()
+        ));
+    }
     
     let chunk = manifest.chunks.first().ok_or_else(|| "No chunks available".to_string())?;
     let client = session_state.get_client_by_id(&chunk.account_id).await
         .ok_or_else(|| "Account not connected".to_string())?;
     
+    // 1. Get or Download the file
+    let temp_path = if let Some(cached_path) = cache_state.get_cached_file(&file_id).await {
+        std::path::PathBuf::from(cached_path)
+    } else {
+        let app_data = app_handle.path().app_data_dir().map_err(|e: tauri::Error| e.to_string())?;
+        let tmp_dir = app_data.join("tmp");
+        if !tmp_dir.exists() {
+            std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+        }
+        let download_path = tmp_dir.join(format!("{}_{}", file_id, manifest.name));
+        cluster_state.download_file(manifest.clone(), download_path.clone(), Arc::clone(&session_state), None)
+            .await.map_err(|e| format!("Download failed: {}", e))?;
+        download_path
+    };
+
+    // 2. Find target peer
     let mut dialogs = client.iter_dialogs();
     let mut target_peer = None;
     while let Some(dialog) = dialogs.next().await.map_err(|e: grammers_client::InvocationError| e.to_string())? {
@@ -149,7 +178,15 @@ pub async fn share_file(
     
     let peer = target_peer.ok_or_else(|| "Could not find target contact in dialogs.".to_string())?;
     
-    let to_peer = match peer {
+    // 3. Upload and Send
+    let mut file = tokio::fs::File::open(&temp_path).await.map_err(|e: std::io::Error| e.to_string())?;
+    let metadata = file.metadata().await.map_err(|e: std::io::Error| e.to_string())?;
+    let stream_size = metadata.len() as usize;
+    
+    let uploaded_file = client.upload_stream(&mut file, stream_size, manifest.name.clone()).await
+        .map_err(|e: std::io::Error| format!("Upload failed: {}", e))?;
+    
+    let input_peer = match peer {
         grammers_client::peer::Peer::User(u) => tl::enums::InputPeer::User(tl::types::InputPeerUser {
             user_id: u.id().bare_id(),
             access_hash: 0, 
@@ -163,31 +200,13 @@ pub async fn share_file(
         }),
     };
 
-    let request = tl::functions::messages::ForwardMessages {
-        silent: false,
-        background: false,
-        with_my_score: false,
-        drop_author: false,
-        drop_media_captions: false,
-        noforwards: false,
-        from_peer: tl::enums::InputPeer::PeerSelf,
-        id: vec![chunk.message_id as i32],
-        random_id: vec![uuid::Uuid::new_v4().as_u128() as i64],
-        to_peer,
-        top_msg_id: None,
-        reply_to: None,
-        schedule_date: None,
-        schedule_repeat_period: None,
-        send_as: None,
-        quick_reply_shortcut: None,
-        allow_paid_floodskip: false,
-        effect: None,
-        video_timestamp: None,
-        allow_paid_stars: None,
-        suggested_post: None,
-    };
+    client.send_message(&input_peer, InputMessage::new().document(uploaded_file)).await
+        .map_err(|e: grammers_client::InvocationError| format!("Send failed: {}", e))?;
 
-    client.invoke(&request).await.map_err(|e: grammers_client::InvocationError| e.to_string())?;
+    // 4. Cleanup if it was a temporary download (not from cache)
+    if !temp_path.to_string_lossy().contains("cache") {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+    }
     
     Ok(())
 }
