@@ -75,9 +75,9 @@ impl SqlxSession {
             
             dc_options.insert(id, DcOption {
                 id,
-                ipv4: ipv4.parse().unwrap(),
-                ipv6: ipv6.parse().unwrap(),
-                auth_key: auth_key.map(|k| k.try_into().unwrap()),
+                ipv4: ipv4.parse().map_err(|e| anyhow::anyhow!("Failed to parse IPv4: {}", e))?,
+                ipv6: ipv6.parse().map_err(|e| anyhow::anyhow!("Failed to parse IPv6: {}", e))?,
+                auth_key: auth_key.map(|k| k.try_into().map_err(|e| anyhow::anyhow!("Failed to parse auth key: {:?}", e))).transpose()?,
             });
         }
 
@@ -96,10 +96,14 @@ impl Session for SqlxSession {
     fn set_home_dc_id(&self, dc_id: i32) -> BoxFuture<'_, ()> {
         self.cache.lock().unwrap().home_dc = dc_id;
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.unwrap();
-            sqlx::query("DELETE FROM dc_home").execute(&mut *tx).await.unwrap();
-            sqlx::query("INSERT INTO dc_home (dc_id) VALUES (?)").bind(dc_id).execute(&mut *tx).await.unwrap();
-            tx.commit().await.unwrap();
+            match self.pool.begin().await {
+                Ok(mut tx) => {
+                    let _ = sqlx::query("DELETE FROM dc_home").execute(&mut *tx).await;
+                    let _ = sqlx::query("INSERT INTO dc_home (dc_id) VALUES (?)").bind(dc_id).execute(&mut *tx).await;
+                    let _ = tx.commit().await;
+                }
+                Err(e) => log::error!("Failed to begin transaction in set_home_dc_id: {}", e),
+            }
         })
     }
 
@@ -113,31 +117,38 @@ impl Session for SqlxSession {
         self.cache.lock().unwrap().dc_options.insert(dc_option.id, dc_option.clone());
         let dc_option = dc_option.clone();
         Box::pin(async move {
-            sqlx::query("INSERT OR REPLACE INTO dc_option (dc_id, ipv4, ipv6, auth_key) VALUES (?, ?, ?, ?)")
+            if let Err(e) = sqlx::query("INSERT OR REPLACE INTO dc_option (dc_id, ipv4, ipv6, auth_key) VALUES (?, ?, ?, ?)")
                 .bind(dc_option.id)
                 .bind(dc_option.ipv4.to_string())
                 .bind(dc_option.ipv6.to_string())
                 .bind(dc_option.auth_key.map(|k| k.to_vec()))
                 .execute(&self.pool)
-                .await
-                .unwrap();
+                .await {
+                    log::error!("Failed to set_dc_option: {}", e);
+                }
         })
     }
 
     fn peer(&self, peer: PeerId) -> BoxFuture<'_, Option<PeerInfo>> {
         Box::pin(async move {
-            let row = if peer.kind() == PeerKind::UserSelf {
+            let row_res = if peer.kind() == PeerKind::UserSelf {
                 sqlx::query("SELECT peer_id, hash, subtype FROM peer_info WHERE subtype & ? LIMIT 1")
                     .bind(PeerSubtype::UserSelf as i64)
                     .fetch_optional(&self.pool)
                     .await
-                    .unwrap()
             } else {
                 sqlx::query("SELECT peer_id, hash, subtype FROM peer_info WHERE peer_id = ? LIMIT 1")
                     .bind(peer.bot_api_dialog_id())
                     .fetch_optional(&self.pool)
                     .await
-                    .unwrap()
+            };
+
+            let row = match row_res {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("Failed to fetch peer: {}", e);
+                    None
+                }
             };
 
             row.map(|r| {
@@ -197,23 +208,31 @@ impl Session for SqlxSession {
             let hash = peer.auth().map(|a| a.hash());
             let subtype_val = subtype.map(|s| s as i64);
 
-            sqlx::query("INSERT OR REPLACE INTO peer_info (peer_id, hash, subtype) VALUES (?, ?, ?)")
+            if let Err(e) = sqlx::query("INSERT OR REPLACE INTO peer_info (peer_id, hash, subtype) VALUES (?, ?, ?)")
                 .bind(peer_id)
                 .bind(hash)
                 .bind(subtype_val)
                 .execute(&self.pool)
-                .await
-                .unwrap();
+                .await {
+                    log::error!("Failed to cache_peer: {}", e);
+                }
         })
     }
 
     fn updates_state(&self) -> BoxFuture<'_, UpdatesState> {
         Box::pin(async move {
-            let state_row = sqlx::query("SELECT pts, qts, date, seq FROM update_state LIMIT 1")
+            let state_row_res = sqlx::query("SELECT pts, qts, date, seq FROM update_state LIMIT 1")
                 .fetch_optional(&self.pool)
-                .await
-                .unwrap();
+                .await;
             
+            let state_row = match state_row_res {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("Failed to fetch update_state: {}", e);
+                    None
+                }
+            };
+
             let mut state = state_row.map(|r| UpdatesState {
                 pts: r.get(0),
                 qts: r.get(1),
@@ -222,15 +241,19 @@ impl Session for SqlxSession {
                 channels: Vec::new(),
             }).unwrap_or_default();
 
-            let channels = sqlx::query("SELECT peer_id, pts FROM channel_state")
+            let channels_res = sqlx::query("SELECT peer_id, pts FROM channel_state")
                 .fetch_all(&self.pool)
-                .await
-                .unwrap();
+                .await;
             
-            state.channels = channels.into_iter().map(|r| ChannelState {
-                id: r.get(0),
-                pts: r.get(1),
-            }).collect();
+            match channels_res {
+                Ok(channels) => {
+                    state.channels = channels.into_iter().map(|r| ChannelState {
+                        id: r.get(0),
+                        pts: r.get(1),
+                    }).collect();
+                }
+                Err(e) => log::error!("Failed to fetch channel_state: {}", e),
+            }
 
             state
         })
@@ -238,51 +261,61 @@ impl Session for SqlxSession {
 
     fn set_update_state(&self, update: UpdateState) -> BoxFuture<'_, ()> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.unwrap();
-            match update {
-                UpdateState::All(s) => {
-                    sqlx::query("DELETE FROM update_state").execute(&mut *tx).await.unwrap();
-                    sqlx::query("INSERT INTO update_state (pts, qts, date, seq) VALUES (?, ?, ?, ?)")
-                        .bind(s.pts).bind(s.qts).bind(s.date).bind(s.seq)
-                        .execute(&mut *tx).await.unwrap();
-                    
-                    sqlx::query("DELETE FROM channel_state").execute(&mut *tx).await.unwrap();
-                    for c in s.channels {
-                        sqlx::query("INSERT INTO channel_state (peer_id, pts) VALUES (?, ?)")
-                            .bind(c.id).bind(c.pts)
-                            .execute(&mut *tx).await.unwrap();
-                    }
-                }
-                UpdateState::Primary { pts, date, seq } => {
-                    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM update_state)")
-                        .fetch_one(&mut *tx).await.unwrap();
-                    if exists {
-                        sqlx::query("UPDATE update_state SET pts = ?, date = ?, seq = ?")
-                            .bind(pts).bind(date).bind(seq)
-                            .execute(&mut *tx).await.unwrap();
+            match self.pool.begin().await {
+                Ok(mut tx) => {
+                    let res = match update {
+                        UpdateState::All(s) => {
+                            let _ = sqlx::query("DELETE FROM update_state").execute(&mut *tx).await;
+                            let _ = sqlx::query("INSERT INTO update_state (pts, qts, date, seq) VALUES (?, ?, ?, ?)")
+                                .bind(s.pts).bind(s.qts).bind(s.date).bind(s.seq)
+                                .execute(&mut *tx).await;
+                            
+                            let _ = sqlx::query("DELETE FROM channel_state").execute(&mut *tx).await;
+                            for c in s.channels {
+                                let _ = sqlx::query("INSERT INTO channel_state (peer_id, pts) VALUES (?, ?)")
+                                    .bind(c.id).bind(c.pts)
+                                    .execute(&mut *tx).await;
+                            }
+                            Ok(())
+                        }
+                        UpdateState::Primary { pts, date, seq } => {
+                            let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM update_state)")
+                                .fetch_one(&mut *tx).await.unwrap_or(false);
+                            if exists {
+                                sqlx::query("UPDATE update_state SET pts = ?, date = ?, seq = ?")
+                                    .bind(pts).bind(date).bind(seq)
+                                    .execute(&mut *tx).await.map(|_| ())
+                            } else {
+                                sqlx::query("INSERT INTO update_state (pts, qts, date, seq) VALUES (?, 0, ?, ?)")
+                                    .bind(pts).bind(date).bind(seq)
+                                    .execute(&mut *tx).await.map(|_| ())
+                            }
+                        }
+                        UpdateState::Secondary { qts } => {
+                           let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM update_state)")
+                                .fetch_one(&mut *tx).await.unwrap_or(false);
+                            if exists {
+                                sqlx::query("UPDATE update_state SET qts = ?")
+                                    .bind(qts).execute(&mut *tx).await.map(|_| ())
+                            } else {
+                                sqlx::query("INSERT INTO update_state (pts, qts, date, seq) VALUES (0, ?, 0, 0)")
+                                    .bind(qts).execute(&mut *tx).await.map(|_| ())
+                            }
+                        }
+                        UpdateState::Channel { id, pts } => {
+                            sqlx::query("INSERT OR REPLACE INTO channel_state (peer_id, pts) VALUES (?, ?)")
+                                .bind(id).bind(pts).execute(&mut *tx).await.map(|_| ())
+                        }
+                    };
+
+                    if let Err(e) = res {
+                        log::error!("Failed to execute update_state queries: {}", e);
                     } else {
-                        sqlx::query("INSERT INTO update_state (pts, qts, date, seq) VALUES (?, 0, ?, ?)")
-                            .bind(pts).bind(date).bind(seq)
-                            .execute(&mut *tx).await.unwrap();
+                        let _ = tx.commit().await;
                     }
                 }
-                UpdateState::Secondary { qts } => {
-                   let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM update_state)")
-                        .fetch_one(&mut *tx).await.unwrap();
-                    if exists {
-                        sqlx::query("UPDATE update_state SET qts = ?")
-                            .bind(qts).execute(&mut *tx).await.unwrap();
-                    } else {
-                        sqlx::query("INSERT INTO update_state (pts, qts, date, seq) VALUES (0, ?, 0, 0)")
-                            .bind(qts).execute(&mut *tx).await.unwrap();
-                    }
-                }
-                UpdateState::Channel { id, pts } => {
-                    sqlx::query("INSERT OR REPLACE INTO channel_state (peer_id, pts) VALUES (?, ?)")
-                        .bind(id).bind(pts).execute(&mut *tx).await.unwrap();
-                }
+                Err(e) => log::error!("Failed to begin transaction in set_update_state: {}", e),
             }
-            tx.commit().await.unwrap();
         })
     }
 }

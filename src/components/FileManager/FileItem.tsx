@@ -1,5 +1,5 @@
 import React from 'react';
-import { Folder, File, FileImage, FileVideo, FileText, ChevronRight } from 'lucide-react';
+import { Folder, File, FileImage, FileVideo, FileText, ChevronRight, RefreshCw } from 'lucide-react';
 import { SelectableItem, FolderInfo, FileManifest } from '../../types/file';
 import { isFolder, formatBytes } from '../../utils/fileUtils';
 
@@ -53,7 +53,7 @@ export const FileItem: React.FC<FileItemProps> = ({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick(e); }}
       onDoubleClick={onDoubleClick}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e); }}
       className={`
@@ -68,9 +68,17 @@ export const FileItem: React.FC<FileItemProps> = ({
       </div>
       
       <div className="flex-1 min-w-0 flex flex-col">
-        <span className={`text-[12px] font-medium truncate ${isSelected ? 'text-black' : 'text-zinc-300'}`}>
-          {item.name}
-        </span>
+        <div className="flex items-center gap-2 overflow-hidden">
+          <span className={`text-[12px] font-medium truncate ${isSelected ? 'text-black' : 'text-zinc-300'}`}>
+            {item.name}
+          </span>
+          {item.is_managed && (
+            <div className={`shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded border ${isSelected ? 'bg-zinc-100 border-zinc-300 text-zinc-900' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+               <RefreshCw size={8} className={isSelected ? 'text-zinc-500' : 'text-blue-500'} />
+               <span className="text-[7px] font-black uppercase tracking-widest">Mirror</span>
+            </div>
+          )}
+        </div>
         {!isFolderItem && (
           <span className={`text-[9px] font-bold uppercase tracking-tighter ${isSelected ? 'text-zinc-600' : 'text-zinc-600'}`}>
             {formatBytes((item as FileManifest).total_size)}

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { useAppInitialization } from './hooks/useAppInitialization';
+import { useTaskSync } from './hooks/useTaskSync';
 
 // Components
 import { Sidebar } from './components/Sidebar/Sidebar';
@@ -11,6 +12,7 @@ import { LoginModal } from './components/LoginModal';
 import { SyncSplashScreen } from './components/SyncSplashScreen';
 import { OnboardingStorage } from './components/OnboardingStorage';
 import { SettingsView } from './components/SettingsView';
+import { MirrorsView } from './components/MirrorsView';
 
 // UI
 import { Loader2 } from 'lucide-react';
@@ -35,6 +37,7 @@ function App() {
   } = useAppStore();
 
   const { initialize, startSync, checkOnboarding } = useAppInitialization();
+  useTaskSync();
   const taskTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -45,12 +48,12 @@ function App() {
   useEffect(() => {
     const unsubUpload = (async () => {
       const { listen } = await import('@tauri-apps/api/event');
-      return await listen<{ file_name: string; processed_bytes: number; total_bytes: number }>('upload-progress', (event) => {
+      return await listen<{ file_id: string; file_name: string; processed_bytes: number; total_bytes: number }>('upload-progress', (event) => {
         const progress = Math.round((event.payload.processed_bytes * 100) / event.payload.total_bytes);
-        setActiveTask(`Uploading: ${event.payload.file_name}`, progress);
+        setActiveTask(event.payload.file_id, progress);
         
         if (taskTimeout.current) clearTimeout(taskTimeout.current);
-        taskTimeout.current = setTimeout(() => setActiveTask(null), 3000);
+        // taskTimeout.current = setTimeout(() => setActiveTask(null), 3000);
       });
     })();
 
@@ -65,9 +68,17 @@ function App() {
       });
     })();
 
+    const unsubMirror = (async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      return await listen<{ id: string; status: string }>('mirror-status-update', (event) => {
+        useAppStore.getState().setMirrorStatus(event.payload.id, event.payload.status);
+      });
+    })();
+
     return () => {
       unsubUpload.then(u => u());
       unsubDownload.then(u => u());
+      unsubMirror.then(u => u());
     };
   }, [setActiveTask]);
 
@@ -147,16 +158,13 @@ function App() {
            {activeView === 'STARRED' && <FileManager category="STARRED" />}
            {activeView === 'NOTES' && <NotesView />}
            {activeView === 'ACCOUNTS' && (
-             <div className="p-10 overflow-auto h-full">
-               <AccountManager 
-                 onAccountsEmpty={() => setAppState('AUTH')} 
-               />
-             </div>
+             <AccountManager 
+               onAccountsEmpty={() => setAppState('AUTH')} 
+             />
            )}
+           {activeView === 'MIRRORS' && <MirrorsView />}
            {activeView === 'SETTINGS' && (
-             <div className="p-10 overflow-auto h-full">
-               <SettingsView />
-             </div>
+             <SettingsView />
            )}
         </AnimateContent>
         

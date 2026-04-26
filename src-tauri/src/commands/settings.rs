@@ -32,10 +32,10 @@ pub async fn update_setting(
         let enable = value == "true";
         if enable {
             // Re-mount (assuming port 9876 for now, which is the default)
-            let _ = crate::os_integration::mount_drive(9876, "Z:");
+            let _ = crate::os_integration::mount_drive(9876, "Z:", None);
         } else {
             // Unmount
-            let _ = crate::os_integration::unmount_drive("Z:");
+            let _ = crate::os_integration::unmount_drive("Z:", None);
         }
     }
 

@@ -194,16 +194,45 @@ pub async fn share_file(
 
 #[tauri::command]
 pub async fn mount_drive() -> Result<String, String> {
-    crate::os_integration::mount_drive(9876, "Z:")
+    crate::os_integration::mount_drive(9876, "Z:", None)
         .map_err(|e| e.to_string())?;
-    Ok("Drive mounted as Z:".to_string())
+    Ok("Drive mounted".to_string())
 }
 
 #[tauri::command]
 pub async fn unmount_drive() -> Result<String, String> {
-    crate::os_integration::unmount_drive("Z:")
+    crate::os_integration::unmount_drive("Z:", None)
         .map_err(|e| e.to_string())?;
     Ok("Drive unmounted".to_string())
+}
+
+#[tauri::command]
+pub async fn create_alias(source_path: String, destination_folder: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell application \"Finder\"
+                set sourceFile to POSIX file \"{}\"
+                set targetFolder to POSIX file \"{}\"
+                make new alias file at targetFolder to sourceFile
+            end tell",
+            source_path, destination_folder
+        );
+        let _ = std::process::Command::new("osascript").args(["-e", &script]).spawn().map_err(|e| e.to_string())?;
+    }
+    
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (source_path, destination_folder);
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_home_dir() -> Result<String, String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    Ok(home)
 }
 
 #[tauri::command]

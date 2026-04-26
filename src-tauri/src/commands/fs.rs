@@ -3,78 +3,49 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use crate::session_manager::SessionManager;
 use crate::cluster::{ClusterOrchestrator, FileManifest};
-use crate::cache::{MetadataCache, FolderInfo};
+use crate::cache::{MetadataCache, FolderInfo, PendingTask};
 
 #[tauri::command]
 pub async fn cluster_upload_file(
-    app: tauri::AppHandle,
-    session_state: State<'_, Arc<SessionManager>>,
-    cluster_state: State<'_, Arc<ClusterOrchestrator>>,
     cache_state: State<'_, Arc<MetadataCache>>,
     file_path: String,
     folder_id: Option<String>,
     account_id: Option<String>,
 ) -> Result<(), String> {
-    let path = PathBuf::from(file_path);
+    let path = PathBuf::from(&file_path);
     let file_name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-    
-    let aid = account_id.clone().ok_or_else(|| "Account ID required".to_string())?;
-    
-    match cluster_state.upload_file(path, Arc::clone(&session_state), file_name, Some(app), folder_id, aid).await {
-        Ok(mut manifest) => {
-            manifest.account_id = account_id;
-            cache_state.save_file(manifest).await.map_err(|e| e.to_string())
-        },
-        Err(e) => Err(e.to_string()),
-    }
+    let aid = account_id.ok_or_else(|| "Account ID required".to_string())?;
+
+    let payload = serde_json::json!({
+        "file_path": file_path,
+        "file_name": file_name,
+        "account_id": aid,
+        "folder_id": folder_id
+    });
+
+    cache_state.enqueue_task("UPLOAD_FILE", &payload.to_string())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn upload_directory(
-    app: tauri::AppHandle,
-    session_state: State<'_, Arc<SessionManager>>,
-    cluster_state: State<'_, Arc<ClusterOrchestrator>>,
     cache_state: State<'_, Arc<MetadataCache>>,
     directory_path: String,
     target_parent_id: Option<String>,
     account_id: String,
 ) -> Result<(), String> {
-    let root_path = PathBuf::from(&directory_path);
-    if !root_path.is_dir() {
-        return Err("Path is not a directory".to_string());
-    }
+    let payload = serde_json::json!({
+        "directory_path": directory_path,
+        "target_parent_id": target_parent_id,
+        "account_id": account_id
+    });
 
-    use std::collections::HashMap;
-    let mut folder_mapping: HashMap<PathBuf, String> = HashMap::new();
-    
-    let root_folder_name = root_path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-    let root_folder_id = cache_state.create_folder(root_folder_name, target_parent_id, Some(account_id.clone())).await.map_err(|e| e.to_string())?;
-    folder_mapping.insert(root_path.clone(), root_folder_id);
-
-    let mut it = walkdir::WalkDir::new(&root_path).into_iter();
-    it.next(); 
-
-    for entry in it {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path().to_path_buf();
-        let parent = path.parent().unwrap_or(&root_path);
-        let remote_parent_id = folder_mapping.get(parent).cloned().unwrap_or_default();
-
-        if entry.file_type().is_dir() {
-            let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-            let new_fid = cache_state.create_folder(name, Some(remote_parent_id), Some(account_id.clone())).await.map_err(|e| e.to_string())?;
-            folder_mapping.insert(path, new_fid);
-        } else {
-            let file_name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-            match cluster_state.upload_file(path, Arc::clone(&session_state), file_name, Some(app.clone()), Some(remote_parent_id), account_id.clone()).await {
-                Ok(mut manifest) => {
-                    manifest.account_id = Some(account_id.clone());
-                    cache_state.save_file(manifest).await.map_err(|e| e.to_string())?;
-                },
-                Err(e) => eprintln!("Failed to upload file {}: {}", entry.path().display(), e),
-            }
-        }
-    }
+    cache_state.enqueue_task("UPLOAD_FOLDER", &payload.to_string())
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -87,13 +58,22 @@ pub async fn cluster_list_files(
 }
 
 #[tauri::command]
+pub async fn get_active_tasks(
+    cache_state: State<'_, Arc<MetadataCache>>,
+) -> Result<Vec<PendingTask>, String> {
+    cache_state.get_pending_tasks().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn create_folder(
     cache_state: State<'_, Arc<MetadataCache>>,
     name: String,
     parent_id: Option<String>,
     account_id: Option<String>,
 ) -> Result<String, String> {
-    cache_state.create_folder(name, parent_id, account_id).await.map_err(|e| e.to_string())
+    let id = cache_state.create_folder(name.clone(), parent_id, account_id).await.map_err(|e| e.to_string())?;
+    let _ = cache_state.log_activity(&id, &name, "FOLDER", "CREATE", None).await;
+    Ok(id)
 }
 
 #[tauri::command]
@@ -128,14 +108,24 @@ pub async fn delete_folder(
         all_files
     };
 
-    for file in files_to_delete {
-        let session_arc = Arc::clone(&session_state);
-        if let Err(e) = cluster_state.delete_file(file, session_arc).await {
-            log::warn!("Failed to delete file from Telegram during folder delete: {}", e);
-        }
-    }
-
+    // Delete from cache immediately so the UI responds instantly
     cache_state.delete_folder_recursive(&folder_id).await.map_err(|e| e.to_string())?;
+
+    // Spawn a background task to clean up files from Telegram
+    let session_arc = Arc::clone(&session_state);
+    let cluster_arc = Arc::clone(&cluster_state);
+    
+    tokio::spawn(async move {
+        log::info!("Starting background cleanup of {} files from deleted folder", files_to_delete.len());
+        for file in files_to_delete {
+            let session = Arc::clone(&session_arc);
+            if let Err(e) = cluster_arc.delete_file(file, session).await {
+                log::warn!("Failed to delete file from Telegram during background folder delete: {}", e);
+            }
+        }
+        log::info!("Background folder cleanup completed.");
+    });
+
     Ok(())
 }
 
@@ -147,10 +137,12 @@ pub async fn rename_item(
     item_type: String, 
 ) -> Result<(), String> {
     match item_type.as_str() {
-        "file" => cache_state.rename_file(&item_id, &new_name).await.map_err(|e| e.to_string()),
-        "folder" => cache_state.rename_folder(&item_id, &new_name).await.map_err(|e| e.to_string()),
-        _ => Err("Unknown item type".to_string()),
-    }
+        "file" => cache_state.rename_file(&item_id, &new_name).await.map_err(|e| e.to_string())?,
+        "folder" => cache_state.rename_folder(&item_id, &new_name).await.map_err(|e| e.to_string())?,
+        _ => return Err("Unknown item type".to_string()),
+    };
+    let _ = cache_state.log_activity(&item_id, &new_name, &item_type.to_uppercase(), "RENAME", None).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -207,4 +199,31 @@ pub async fn get_item_path(
     } else {
         Ok(vec![]) // Root
     }
+}
+
+#[tauri::command]
+pub async fn toggle_item_starred(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    id: String,
+    item_type: String,
+    starred: bool,
+) -> Result<(), String> {
+    cache_state.toggle_starred(&id, &item_type, starred).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_category_content(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    category: String,
+    account_id: String,
+) -> Result<(Vec<FolderInfo>, Vec<FileManifest>), String> {
+    cache_state.get_category_content(&account_id, &category).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_item_history(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    item_id: String,
+) -> Result<Vec<crate::cache::ActivityEntry>, String> {
+    cache_state.get_item_history(&item_id).await.map_err(|e| e.to_string())
 }

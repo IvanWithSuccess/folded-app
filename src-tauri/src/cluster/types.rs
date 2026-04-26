@@ -31,7 +31,12 @@ pub struct FileManifest {
     pub storage_hub_id: Option<i64>,
     pub storage_hub_access_hash: Option<i64>,
     pub is_external: bool,
+    pub is_starred: bool,
     pub created_at: i64,
+    pub is_current_version: bool,
+    pub version_of: Option<String>,
+    pub version_number: i32,
+    pub deleted_at: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

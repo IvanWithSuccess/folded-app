@@ -7,6 +7,8 @@ mod sync;
 mod hubs;
 mod utils;
 mod notes;
+pub mod mirrors;
+pub mod task_manager;
 
 // Re-export types for external usage
 pub use types::*;

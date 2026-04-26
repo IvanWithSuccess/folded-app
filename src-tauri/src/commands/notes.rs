@@ -106,9 +106,13 @@ pub async fn note_attach_file(
         .bind(&note_id)
         .execute(cache_state.get_pool()).await.map_err(|e| e.to_string())?;
          
-    cluster_state.push_manifest(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state))
-        .await
-        .map_err(|e| e.to_string())?;
+    let orchestrator = Arc::clone(&cluster_state);
+    let session = Arc::clone(&session_state);
+    let cache = Arc::clone(&cache_state);
+    let acc_id = account_id.clone();
+    tokio::spawn(async move {
+        let _ = orchestrator.push_manifest(&acc_id, session, cache).await;
+    });
         
     Ok(())
 }
@@ -134,9 +138,13 @@ pub async fn note_detach_file(
         .bind(&note_id)
         .execute(cache_state.get_pool()).await.map_err(|e| e.to_string())?;
         
-    cluster_state.push_manifest(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state))
-        .await
-        .map_err(|e| e.to_string())?;
+    let orchestrator = Arc::clone(&cluster_state);
+    let session = Arc::clone(&session_state);
+    let cache = Arc::clone(&cache_state);
+    let acc_id = account_id.clone();
+    tokio::spawn(async move {
+        let _ = orchestrator.push_manifest(&acc_id, session, cache).await;
+    });
         
     Ok(())
 }

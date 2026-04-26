@@ -21,19 +21,42 @@ interface FileManagerProps {
 }
 
 export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
-  const { activeAccountId, setActiveAccount, accounts, isSyncing, setIsSyncing } = useAppStore();
-  const explorer = useFileExplorer();
+  const { 
+    activeAccountId, 
+    setActiveAccount, 
+    accounts, 
+    isSyncing, 
+    setIsSyncing,
+    navigationPath,
+    pendingRevealId,
+    clearNavigation
+  } = useAppStore();
+  const explorer = useFileExplorer(category);
   const [defaultOpenMode, setDefaultOpenMode] = useState<'system' | 'browser'>('system');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileManifest[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [inspectItem, setInspectItem] = useState<SelectableItem | null>(null);
   const prevSyncing = useRef(false);
+
+  // External Navigation listener
+  useEffect(() => {
+    if (navigationPath) {
+      explorer.setPath(navigationPath);
+      explorer.refreshCurrentView(navigationPath);
+      
+      if (pendingRevealId) {
+        // We'll need to find the item in the last column to inspect it
+        // For now, let's just clear navigation state
+      }
+      clearNavigation();
+    }
+  }, [navigationPath, pendingRevealId, explorer.setPath, explorer.refreshCurrentView, clearNavigation]);
   
   // Modal states
   const [activeModal, setActiveModal] = useState<'newFolder' | 'rename' | 'delete' | 'conflict' | null>(null);
   const [modalInput, setModalInput] = useState('');
-  const [targetItem, setTargetItem] = useState<SelectableItem | null>(null);
+  const [targetItems, setTargetItems] = useState<SelectableItem[]>([]);
 
   // Context Menu state
   const [menu, setMenu] = useState<{ x: number, y: number, item: SelectableItem | null, colIdx: number } | null>(null);
@@ -218,7 +241,12 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
 
   const handleAction = (actionId: string) => {
     const item = menu?.item;
-    setTargetItem(item || null);
+    const isSelected = item && explorer.selectedItems.has(item.id);
+    const selection = isSelected && explorer.selectedItems.size > 1
+      ? [...explorer.columns.flatMap(c => [...c.folders, ...c.files])].filter(i => explorer.selectedItems.has(i.id))
+      : item ? [item] : [];
+    
+    setTargetItems(selection);
 
     switch (actionId) {
       case 'open_browser':
@@ -238,15 +266,12 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         }
         break;
       case 'delete':
-        if (item) setActiveModal('delete');
+        if (selection.length > 0) setActiveModal('delete');
         break;
       case 'copy':
       case 'move':
-        if (item) {
-          const items = explorer.selectedItems.size > 1
-            ? [...explorer.columns.flatMap(c => [...c.folders, ...c.files])].filter(i => explorer.selectedItems.has(i.id))
-            : [item];
-          explorer.setClipboard({ items, mode: actionId });
+        if (selection.length > 0) {
+          explorer.setClipboard({ items: selection, mode: actionId });
         }
         break;
       case 'paste':
@@ -266,32 +291,38 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         if (item) actions.handleDownload(item);
         break;
       case 'downloadTo':
-        if (item) {
-           const items = explorer.selectedItems.size > 1
-             ? [...explorer.columns.flatMap(c => [...c.folders, ...c.files])].filter(i => explorer.selectedItems.has(i.id))
-             : [item];
-           actions.handleDownloadToSpecificPath(items);
+        if (selection.length > 0) {
+           actions.handleDownloadToSpecificPath(selection);
         }
         break;
+      case 'star':
+        if (item) actions.handleToggleStarred(item);
+        break;
+      case 'uploadFile':
+        handleUploadFileInColumn(menu?.colIdx, false);
+        break;
+      case 'uploadFolder':
+        handleUploadFileInColumn(menu?.colIdx, true);
+        break;
     }
+  };
+
+  const handleUploadFileInColumn = (colIdx: number | undefined, isDir: boolean) => {
+    const parentId = colIdx !== undefined ? explorer.path[colIdx] : explorer.path[explorer.path.length - 1];
+    actions.handleUploadFile(parentId, isDir);
   };
 
   const handleConfirmModal = () => {
     if (activeModal === 'newFolder') {
       const parentId = explorer.path[menu ? menu.colIdx : explorer.path.length - 1];
       actions.handleCreateFolder(modalInput, parentId);
-    } else if (activeModal === 'rename' && targetItem) {
-      actions.handleRename(targetItem, modalInput);
-    } else if (activeModal === 'delete' && targetItem) {
-      actions.handleDelete(targetItem);
-      if (inspectItem?.id === targetItem.id) setInspectItem(null);
+    } else if (activeModal === 'rename' && targetItems.length > 0) {
+      actions.handleRename(targetItems[0], modalInput);
+    } else if (activeModal === 'delete' && targetItems.length > 0) {
+      actions.handleDelete(targetItems);
+      if (inspectItem && targetItems.some(i => i.id === inspectItem.id)) setInspectItem(null);
     }
     setActiveModal(null);
-  };
-
-  const handleUploadFileDesktop = (isDir: boolean) => {
-    const parentId = explorer.path[explorer.path.length - 1];
-    actions.handleUploadFile(parentId, isDir);
   };
 
   return (
@@ -309,8 +340,9 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
           explorer.refreshCurrentView(newPath);
         }}
         onCreateFolder={() => { setTargetItem(null); setActiveModal('newFolder'); }}
-        onUploadFile={() => handleUploadFileDesktop(false)}
-        onUploadFolder={() => handleUploadFileDesktop(true)}
+        onUploadFile={() => handleUploadFileInColumn(undefined, false)}
+        onUploadFolder={() => handleUploadFileInColumn(undefined, true)}
+        category={category}
       />
 
       <div className="flex-1 flex overflow-hidden bg-zinc-950">
@@ -321,7 +353,13 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
             onReveal={handleReveal} 
           />
         ) : (
-          <div className="flex-1 flex overflow-x-auto overflow-y-hidden custom-scrollbar">
+          <div 
+            className="flex-1 flex overflow-x-auto overflow-y-hidden custom-scrollbar"
+            onClick={() => {
+              explorer.setSelectedItems(new Set());
+              setInspectItem(null);
+            }}
+          >
             {explorer.columns.map((col, idx) => (
               <FileColumn 
                 key={`${idx}-${explorer.path[idx]}`}
@@ -349,7 +387,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
               item={inspectItem}
               onClose={() => setInspectItem(null)}
               onDownload={actions.handleDownload}
-              onDelete={actions.handleDelete}
+              onDelete={(item) => isFolder(item) ? actions.handleDelete([item]) : actions.handleDeleteWithVersions(item as FileManifest)}
+              onRefresh={() => explorer.refreshCurrentView(explorer.path)}
             />
           </ErrorBoundary>
         )}
@@ -361,6 +400,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         inputValue={modalInput}
         setInputValue={setModalInput}
         onConfirm={handleConfirmModal}
+        targetCount={targetItems.length}
       />
 
       {menu && (

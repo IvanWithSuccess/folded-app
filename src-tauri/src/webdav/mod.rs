@@ -3,7 +3,7 @@ pub mod fs;
 use dav_server::{DavHandler, memls::MemLs};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use axum::{Router, response::IntoResponse, body::Body as AxumBody};
 use crate::cache::MetadataCache;
 use crate::cluster::ClusterOrchestrator;
@@ -33,6 +33,7 @@ impl WebDavBridge {
         let handler = DavHandler::builder()
             .filesystem(Box::new(fs))
             .locksystem(ls)
+            .autoindex(true)
             .build_handler();
 
         Self { handler }
@@ -63,6 +64,8 @@ impl WebDavBridge {
     }
 
     async fn handle_request(&self, req: axum::extract::Request) -> impl IntoResponse {
+        let method = req.method().clone();
+        let uri = req.uri().clone();
         let (parts, body) = req.into_parts();
         
         // 1. Convert axum (http 1.x) Request parts to http_02 Request parts
@@ -87,6 +90,9 @@ impl WebDavBridge {
         
         // 3. Handle with dav-server
         let dav_res = self.handler.handle_stream(dav_req).await;
+        let status = dav_res.status().as_u16();
+        
+        log::info!("WebDAV: {} {} -> {}", method, uri, status);
         
         // 4. Convert http_02 Response back to axum Response
         let (res_parts, res_body) = dav_res.into_parts();

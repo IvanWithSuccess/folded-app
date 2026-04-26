@@ -38,9 +38,10 @@ export const NoteList: React.FC<NoteListProps> = ({
            </button>
            <button 
              onClick={onNew}
-             className="p-1.5 rounded-md bg-white text-black hover:bg-zinc-200 transition-colors shadow-sm"
+             className="p-1.5 rounded-md bg-zinc-100 text-black hover:bg-white transition-all shadow-lg active:scale-95 flex items-center gap-2 px-3"
            >
-             <Plus size={14} />
+             <Plus size={14} strokeWidth={3} />
+             <span className="text-[10px] font-black uppercase tracking-tighter">New Note</span>
            </button>
         </div>
       </div>
@@ -77,8 +78,10 @@ export const NoteList: React.FC<NoteListProps> = ({
               <div 
                 key={note.id}
                 onClick={() => onSelect(note)}
-                className={`group p-4 rounded-2xl cursor-pointer transition-all border border-transparent
-                  ${selectedNoteId === note.id ? 'bg-zinc-800 border-zinc-700 shadow-xl' : 'hover:bg-zinc-800/30'}`}
+                className={`group p-4 rounded-xl cursor-pointer transition-all border mb-2
+                  ${selectedNoteId === note.id 
+                    ? 'bg-zinc-800/80 border-blue-500/50 shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-md translate-x-1' 
+                    : 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-800/40 hover:border-zinc-700/50 hover:translate-x-1'}`}
               >
                 <div className="flex justify-between items-start gap-3 mb-2">
                    <span className={`text-[12px] font-medium line-clamp-2 leading-relaxed flex-1

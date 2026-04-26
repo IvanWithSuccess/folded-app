@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { FolderInfo, FileManifest, ColumnContent, SelectableItem } from '../types/file';
 import { useAppStore } from '../store/useAppStore';
 
-export function useFileExplorer() {
+export function useFileExplorer(category?: string) {
   const { activeAccountId } = useAppStore();
   const [columns, setColumns] = useState<ColumnContent[]>([]);
   const [path, setPath] = useState<(string | null)[]>([null]);
@@ -23,6 +23,14 @@ export function useFileExplorer() {
 
   const fetchColumnData = useCallback(async (folderId: string | null) => {
     try {
+      if (category && folderId === null) {
+        const result = await invoke<[FolderInfo[], FileManifest[]]>('get_category_content', { 
+          category,
+          accountId: activeAccountId 
+        });
+        return { folders: result[0], files: result[1] };
+      }
+
       const result = await invoke<[FolderInfo[], FileManifest[]]>('list_folder_content', { 
         folderId,
         accountId: activeAccountId 
@@ -32,7 +40,7 @@ export function useFileExplorer() {
       console.error('Failed to fetch folder content:', e);
       return { folders: [], files: [] };
     }
-  }, [activeAccountId]);
+  }, [activeAccountId, category]);
 
   const initColumns = useCallback(async () => {
     const rootData = await fetchColumnData(null);
@@ -52,7 +60,7 @@ export function useFileExplorer() {
   // Initial load
   useEffect(() => {
     initColumns();
-  }, [initColumns, activeAccountId]);
+  }, [initColumns, activeAccountId, category]);
 
   return {
     columns, setColumns,

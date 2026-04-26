@@ -13,18 +13,25 @@ impl ClusterOrchestrator {
         &self,
         file_path: PathBuf,
         session_manager: Arc<crate::session_manager::SessionManager>,
+        cache: Arc<crate::cache::MetadataCache>,
         file_name: String,
         app_handle: Option<tauri::AppHandle>,
         folder_id: Option<String>,
         account_id: String,
+        external_upload_id: Option<String>,
     ) -> Result<FileManifest> {
         let account_ids = vec![account_id.clone()];
-        let plan = self.plan_chunks(file_path.clone(), &account_ids)?;
+        
+        let chunk_str = cache.get_setting("chunk_size_gb").await.ok().flatten().unwrap_or_else(|| "1.9".to_string());
+        let chunk_gb: f64 = chunk_str.parse().unwrap_or(1.9);
+        let max_chunk_size_bytes = (chunk_gb * 1024.0 * 1024.0 * 1024.0) as u64;
+        
+        let plan = self.plan_chunks(file_path.clone(), &account_ids, max_chunk_size_bytes)?;
 
         let metadata = tokio::fs::metadata(&file_path).await?;
         let total_size = metadata.len();
         
-        let upload_id = uuid::Uuid::new_v4().to_string();
+        let upload_id = external_upload_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let mut upload_tasks: Vec<tokio::task::JoinHandle<Result<Option<ChunkMeta>, anyhow::Error>>> = Vec::new();
         
         let total_uploaded = Arc::new(tokio::sync::Mutex::new(0u64));
@@ -134,14 +141,19 @@ impl ClusterOrchestrator {
             id: uuid::Uuid::new_v4().to_string(),
             name: file_name,
             total_size,
-            chunk_size: Self::determine_chunk_size(total_size),
+            chunk_size: Self::determine_chunk_size(total_size, max_chunk_size_bytes),
             chunks,
             folder_id,
             account_id: Some(account_id),
             storage_hub_id: None,
             storage_hub_access_hash: None,
             is_external: false,
+            is_starred: false,
             created_at: chrono::Utc::now().timestamp(),
+            is_current_version: true,
+            version_of: None,
+            version_number: 1,
+            deleted_at: None,
         };
 
         Ok(manifest)

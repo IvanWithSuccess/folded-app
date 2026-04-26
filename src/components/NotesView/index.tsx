@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useNotes, NoteInfo } from '../../hooks/useNotes';
 import { NoteList } from './NoteList';
@@ -11,14 +11,26 @@ export const NotesView: React.FC = () => {
     searchQuery, 
     setSearchQuery, 
     fetchNotes, 
-    handleSync,
+    handleSync, 
     handleUpdate, 
     handleDelete, 
-    handleCreate 
+    handleCreate, 
+    handleAttach, 
+    handleDetach 
   } = useNotes();
 
   const [selectedNote, setSelectedNote] = useState<NoteInfo | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Sync selected note with the list when notes update
+  useEffect(() => {
+    if (selectedNote) {
+      const updated = notes.find(n => n.id === selectedNote.id);
+      if (updated && updated !== selectedNote) {
+        setSelectedNote(updated);
+      }
+    }
+  }, [notes, selectedNote]);
 
   const handleSelectNote = (note: NoteInfo) => {
     setSelectedNote(note);
@@ -31,8 +43,11 @@ export const NotesView: React.FC = () => {
   };
 
   const handleCreateNote = async (content: string) => {
-    await handleCreate(content);
+    const newNote = await handleCreate(content);
     setIsCreating(false);
+    if (newNote) {
+      setSelectedNote(newNote);
+    }
   };
 
   const handleUpdateNote = async (note: NoteInfo, content: string) => {
@@ -40,8 +55,8 @@ export const NotesView: React.FC = () => {
   };
 
   const handleDeleteNote = async (note: NoteInfo) => {
-    await handleDelete(note);
     if (selectedNote?.id === note.id) setSelectedNote(null);
+    await handleDelete(note);
   };
 
   return (
@@ -67,6 +82,8 @@ export const NotesView: React.FC = () => {
             onSave={(id, content) => selectedNote ? handleUpdateNote(selectedNote, content) : handleCreateNote(content)}
             onDelete={selectedNote ? () => handleDeleteNote(selectedNote) : () => {}}
             onUpdate={handleUpdateNote}
+            onAttach={(fileId) => selectedNote && handleAttach(selectedNote.id, fileId)}
+            onDetach={(fileId) => selectedNote && handleDetach(selectedNote.id, fileId)}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center opacity-20">

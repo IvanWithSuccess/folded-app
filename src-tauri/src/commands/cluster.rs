@@ -104,12 +104,12 @@ pub async fn sync_account(
 ) -> Result<(), String> {
     log::info!("Starting intelligent sync for account {}", account_id);
     
-    let pull_result = cluster_state.pull_manifest(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
+    let _ = cluster_state.pull_manifest(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
     
-    if pull_result.is_err() {
-        log::info!("No manifest found for {}, performing initial deep index...", account_id);
-        let _ = cluster_state.maintenance_crawl(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
-    }
+    // Always perform an immediate "burst" crawl to find new messages/notes before returning to UI
+    log::info!("Performing immediate maintenance crawl for {}", account_id);
+    let _ = cluster_state.maintenance_crawl(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
+
 
     let mut active = sync_tracker.active_crawlers.lock().await;
     if !active.contains(&account_id) {
@@ -125,7 +125,6 @@ pub async fn sync_account(
             loop {
                 if let Err(e) = cluster_clone.maintenance_crawl(&account_id_clone, Arc::clone(&session_clone), Arc::clone(&cache_clone)).await {
                     log::error!("Background crawl error for {}: {}", account_id_clone, e);
-                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                 }
                 
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;

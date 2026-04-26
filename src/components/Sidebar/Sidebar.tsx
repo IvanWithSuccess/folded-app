@@ -2,12 +2,12 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Files, Image, FileText, Star, Settings, UserPlus, 
-  ChevronDown, ChevronRight, HardDrive, MessageSquare
+  ChevronDown, ChevronRight, HardDrive, MessageSquare, RefreshCw
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { ViewCategory } from '../../types/file';
 
-import appIcon from '../../assets/app-icon.png';
+import logoSvg from '../../assets/logo.svg';
 
 export const Sidebar: React.FC = () => {
   const { 
@@ -20,8 +20,12 @@ export const Sidebar: React.FC = () => {
     toggleAccountExpanded,
     nodeStatus,
     activeTask,
-    taskProgress
+    taskProgress,
+    activeMirrors,
+    queueTasks
   } = useAppStore();
+
+  const isMirrorSyncing = Object.values(activeMirrors).some(status => status === 'INDEXING' || status === 'SYNCING');
 
   const handleNavClick = (accountId: string, view: ViewCategory) => {
     setActiveAccount(accountId);
@@ -29,22 +33,22 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 h-full flex flex-col border-r border-zinc-800 shrink-0 select-none" style={{ backgroundColor: '#0d0d0f' }}>
+    <div className="w-64 h-full flex flex-col border-r border-zinc-800 shrink-0 select-none" style={{ backgroundColor: '#09090b' }}>
       {/* App Header */}
-      <div className="h-14 flex items-center px-4 border-b border-zinc-800 gap-3">
-        <img src={appIcon} alt="Folded Cloud" className="w-8 h-8 rounded-lg shrink-0" />
+      <div className="h-14 flex items-center px-4 border-b border-zinc-800 gap-3 bg-[#0a0a0c]">
+        <img src={logoSvg} alt="Folded Cloud" className="w-8 h-8 rounded-md shrink-0 shadow-[0_0_15px_rgba(59,130,246,0.15)]" />
         <div className="flex flex-col leading-tight">
-          <span className="text-[12px] font-black text-white tracking-tight">Folded</span>
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">Cloud Storage</span>
+          <span className="text-[12px] font-black text-white tracking-tight uppercase">Folded</span>
+          <span className="text-[8px] font-black uppercase tracking-[0.3em] text-zinc-600">Storage Cluster</span>
         </div>
       </div>
 
       {/* Main Navigation */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto py-5 px-3 space-y-7 custom-scrollbar">
         
         {/* Account Drives */}
-        <div className="space-y-1">
-          <h3 className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-600">Drives</h3>
+        <div className="space-y-1.5">
+          <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-zinc-700">Storage Nodes</h3>
           
           {accounts.map(account => {
             const isExpanded = expandedAccounts.has(account.id);
@@ -53,13 +57,15 @@ export const Sidebar: React.FC = () => {
             return (
               <div key={account.id} className="space-y-0.5">
                 <div 
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all
-                    ${isActiveDrive ? 'bg-zinc-800/50 text-white' : 'text-zinc-500 hover:bg-zinc-800/30 hover:text-zinc-300'}`}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-all border border-transparent
+                    ${isActiveDrive ? 'bg-zinc-900/50 border-zinc-800/50 text-white' : 'text-zinc-500 hover:bg-zinc-900/30 hover:text-zinc-300'}`}
                   onClick={() => toggleAccountExpanded(account.id)}
                 >
-                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  <HardDrive size={16} className={isActiveDrive ? 'text-blue-400' : ''} />
-                  <span className="text-[12px] font-medium truncate flex-1">{account.username || account.first_name || 'Account'}</span>
+                  <span className={isActiveDrive ? 'text-blue-500' : 'text-zinc-700'}>
+                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </span>
+                  <HardDrive size={14} className={isActiveDrive ? 'text-blue-400' : 'opacity-40'} />
+                  <span className="text-[11px] font-bold tracking-tight truncate flex-1">{account.username || account.first_name || 'NODE'}</span>
                 </div>
 
                 <AnimatePresence>
@@ -68,22 +74,22 @@ export const Sidebar: React.FC = () => {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden ml-4 pl-4 border-l border-zinc-800 space-y-0.5"
+                      className="overflow-hidden ml-4 pl-4 border-l border-zinc-800/50 space-y-0.5"
                     >
                       {[
-                        { id: 'FILES', label: 'Files', icon: <Files size={14} /> },
-                        { id: 'PHOTOS', label: 'Photos', icon: <Image size={14} /> },
-                        { id: 'DOCUMENTS', label: 'Documents', icon: <FileText size={14} /> },
-                        { id: 'NOTES', label: 'Notes', icon: <MessageSquare size={14} /> },
-                        { id: 'STARRED', label: 'Starred', icon: <Star size={14} /> },
+                        { id: 'FILES', label: 'All Files', icon: <Files size={12} /> },
+                        { id: 'PHOTOS', label: 'Media Lab', icon: <Image size={12} /> },
+                        { id: 'DOCUMENTS', label: 'Documents', icon: <FileText size={12} /> },
+                        { id: 'NOTES', label: 'Notes', icon: <MessageSquare size={12} /> },
+                        { id: 'STARRED', label: 'Starred', icon: <Star size={12} /> },
                       ].map(item => (
                         <div 
                           key={item.id}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-[12px] transition-colors
-                            ${isActiveDrive && activeView === item.id ? 'bg-white text-black font-semibold' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-[10px] uppercase font-black tracking-widest transition-all
+                            ${isActiveDrive && activeView === item.id ? 'bg-white text-black' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
                           onClick={() => handleNavClick(account.id, item.id as ViewCategory)}
                         >
-                          {item.icon}
+                          <span className={isActiveDrive && activeView === item.id ? 'text-black' : 'opacity-60'}>{item.icon}</span>
                           {item.label}
                         </div>
                       ))}
@@ -96,68 +102,101 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Global Tools */}
-        <div className="pt-4 border-t border-zinc-800 space-y-1">
+        <div className="pt-6 border-t border-zinc-800/50 space-y-1">
+          <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-zinc-700">System Utilities</h3>
           <div 
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-[12px] transition-colors
-              ${activeView === 'ACCOUNTS' ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[10px] font-black uppercase tracking-widest transition-all
+              ${activeView === 'MIRRORS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
+            onClick={() => setActiveView('MIRRORS')}
+          >
+            <RefreshCw size={12} className={activeView === 'MIRRORS' ? 'text-blue-500' : 'opacity-60'} />
+            Folder Mirroring
+          </div>
+          <div 
+            className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[10px] font-black uppercase tracking-widest transition-all
+              ${activeView === 'ACCOUNTS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
             onClick={() => setActiveView('ACCOUNTS')}
           >
-            <UserPlus size={14} />
+            <UserPlus size={12} className={activeView === 'ACCOUNTS' ? 'text-blue-500' : 'opacity-60'} />
             Account Center
           </div>
           <div 
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-[12px] transition-colors
-              ${activeView === 'SETTINGS' ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[10px] font-black uppercase tracking-widest transition-all
+              ${activeView === 'SETTINGS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
             onClick={() => setActiveView('SETTINGS')}
           >
-            <Settings size={14} />
+            <Settings size={12} className={activeView === 'SETTINGS' ? 'text-blue-500' : 'opacity-60'} />
             Global Settings
           </div>
         </div>
       </div>
 
       {/* Footer Info */}
-      <div className="p-4 border-t border-zinc-800 space-y-3">
+      <div className="p-5 border-t border-zinc-800 bg-[#0a0a0c] space-y-4">
         <div className="flex items-center justify-between">
            <div className="flex flex-col">
-              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Network Status</span>
-              <span className={`text-[10px] font-bold tracking-wide uppercase ${nodeStatus === 'OFFLINE' ? 'text-red-500' : 'text-zinc-300'}`}>
+              <span className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.2em]">Network Link</span>
+              <span className={`text-[10px] font-black tracking-widest uppercase ${nodeStatus === 'OFFLINE' ? 'text-red-500' : 'text-zinc-400'}`}>
                 {nodeStatus}
               </span>
            </div>
            <div className={`w-1.5 h-1.5 rounded-full ${
              nodeStatus === 'OFFLINE' ? 'bg-red-500' : 
-             activeTask ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
+             activeTask ? 'bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]'
            }`}></div>
         </div>
 
+        {isMirrorSyncing && (
+          <div className="flex items-center justify-between pt-1 border-t border-zinc-800/30">
+             <div className="flex flex-col">
+                <span className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.2em]">Mirroring</span>
+                <span className="text-[10px] font-black tracking-widest uppercase text-blue-400">
+                  Active
+                </span>
+             </div>
+             <div className="flex items-center justify-center w-5 h-5 rounded-md bg-blue-500/5 border border-blue-500/10 text-blue-500/60 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
+                <RefreshCw size={10} className="animate-spin" />
+             </div>
+          </div>
+        )}
+
         <AnimatePresence>
-          {activeTask && (
+          {queueTasks.length > 0 && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="bg-zinc-950/50 border border-zinc-800/30 rounded-xl p-3 space-y-2 overflow-hidden"
+              className="bg-zinc-950 border border-zinc-800/50 rounded-md p-3 space-y-3 overflow-hidden shadow-inner"
             >
-               <div className="flex justify-between items-end mb-1">
-                  <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none">
-                    Active Task
-                  </span>
-                  <span className="text-[10px] font-mono text-zinc-400 leading-none">
-                    {taskProgress}%
+               <div className="flex justify-between items-end">
+                  <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.15em]">
+                    Queue Manager ({queueTasks.filter(t => t.status === 'RUNNING').length}/{queueTasks.length})
                   </span>
                </div>
                
-               <div className="h-1.5 w-full bg-zinc-800/50 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${taskProgress}%` }}
-                    className="h-full bg-blue-500 transition-all duration-500"
-                  ></motion.div>
-               </div>
-               
-               <div className="text-[9px] font-medium text-zinc-400 truncate mt-2 italic">
-                 {activeTask}
+               <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                 {queueTasks.map(task => (
+                   <div key={task.id} className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-tighter">
+                        <span className="text-zinc-400 truncate max-w-[120px]">{JSON.parse(task.payload).file_name || task.task_type}</span>
+                        <span className={`px-1 rounded-[2px] ${
+                          task.status === 'RUNNING' ? 'bg-blue-500/20 text-blue-400 animate-pulse' :
+                          task.status === 'FAILED' ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800 text-zinc-500'
+                        }`}>
+                          {task.status}
+                        </span>
+                      </div>
+                      {task.status === 'RUNNING' && activeTask && task.id === activeTask && (
+                        <div className="h-0.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${taskProgress}%` }}
+                            className="h-full bg-blue-600 transition-all duration-300"
+                          ></motion.div>
+                        </div>
+                      )}
+                   </div>
+                 ))}
                </div>
             </motion.div>
           )}

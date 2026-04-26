@@ -11,7 +11,11 @@ impl ClusterOrchestrator {
         session_manager: Arc<crate::session_manager::SessionManager>,
         cache: Arc<crate::cache::MetadataCache>,
     ) -> Result<()> {
+        log::info!("Performing full initial index for account {}", account_id);
+        // 1. Get the latest cloud state (file tree)
         let _ = self.pull_manifest(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await;
+        // 2. Scan for any new messages/notes since last run
+        let _ = self.maintenance_crawl(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await;
         Ok(())
     }
 
@@ -138,11 +142,12 @@ impl ClusterOrchestrator {
                 } else {
                     None
                 };
-                sqlx::query("INSERT OR IGNORE INTO folders (id, name, parent_id, account_id, created_at) VALUES (?, ?, ?, ?, ?)")
+                sqlx::query("INSERT OR IGNORE INTO folders (id, name, parent_id, account_id, is_starred, created_at) VALUES (?, ?, ?, ?, ?, ?)")
                     .bind(&folder.id)
                     .bind(&folder.name)
                     .bind(parent_id)
                     .bind(account_id)
+                    .bind(folder.is_starred)
                     .bind(folder.created_at)
                     .execute(cache.get_pool()).await?;
             }
@@ -277,7 +282,12 @@ impl ClusterOrchestrator {
                         storage_hub_id: None,
                         storage_hub_access_hash: None,
                         is_external: true,
+                        is_starred: false,
                         created_at: msg.date().timestamp(),
+                        is_current_version: true,
+                        version_of: None,
+                        version_number: 1,
+                        deleted_at: None,
                     };
                     let _ = cache.save_file(manifest).await;
                 }

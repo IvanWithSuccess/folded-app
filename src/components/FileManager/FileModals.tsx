@@ -25,7 +25,7 @@ const Dialog: React.FC<DialogProps> = ({ isOpen, onClose, onConfirm, title, icon
           initial={{ scale: 0.95, opacity: 0, y: 10 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          className="relative bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden"
+          className="relative bg-[#0a0a0c] border border-zinc-800/80 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
         >
           <div className="p-8">
             <div className="flex items-center gap-3 mb-6">
@@ -42,14 +42,16 @@ const Dialog: React.FC<DialogProps> = ({ isOpen, onClose, onConfirm, title, icon
             <div className="flex gap-3">
               <button 
                 onClick={onConfirm}
-                className={`flex-1 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all
-                  ${confirmVarient === 'danger' ? 'bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-900/20' : 'bg-white text-black hover:bg-zinc-200 shadow-lg'}`}
+                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                  ${confirmVarient === 'danger' 
+                    ? 'bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30 hover:border-red-500/50 hover:text-red-300 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
+                    : 'bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600/30 hover:border-blue-500/50 hover:text-blue-300 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]'}`}
               >
                 {confirmLabel}
               </button>
               <button 
                 onClick={onClose}
-                className="flex-1 py-3 rounded-full bg-zinc-800 text-zinc-400 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-700 hover:text-white transition-all"
+                className="flex-1 py-3 rounded-xl bg-[#050505] border border-zinc-800/80 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 hover:text-zinc-300 hover:border-zinc-700 transition-all"
               >
                 Cancel
               </button>
@@ -67,6 +69,7 @@ interface FileModalsProps {
   inputValue: string;
   setInputValue: (v: string) => void;
   onConfirm: () => void;
+  targetCount: number;
   conflictDetails?: { name: string };
   onConflictAction?: (action: 'overwrite' | 'duplicate' | 'cancel') => void;
 }
@@ -77,6 +80,7 @@ export const FileModals: React.FC<FileModalsProps> = ({
   inputValue,
   setInputValue,
   onConfirm,
+  targetCount,
   conflictDetails,
   onConflictAction
 }) => {
@@ -94,7 +98,7 @@ export const FileModals: React.FC<FileModalsProps> = ({
         <p className="text-xs text-zinc-500 mb-4 font-medium uppercase tracking-tight">Enter folder designation</p>
         <input 
           autoFocus
-          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-sm text-white focus:ring-1 focus:ring-zinc-700 outline-none shadow-inner"
+          className="w-full bg-[#050505] border border-zinc-800/80 rounded-xl p-4 text-sm text-white focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none shadow-inner transition-all font-mono"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="New Folder"
@@ -113,7 +117,7 @@ export const FileModals: React.FC<FileModalsProps> = ({
         <p className="text-xs text-zinc-500 mb-4 font-medium uppercase tracking-tight">Enter new identification</p>
         <input 
           autoFocus
-          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-sm text-white focus:ring-1 focus:ring-zinc-700 outline-none shadow-inner"
+          className="w-full bg-[#050505] border border-zinc-800/80 rounded-xl p-4 text-sm text-white focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none shadow-inner transition-all font-mono"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="New Name"
@@ -131,7 +135,10 @@ export const FileModals: React.FC<FileModalsProps> = ({
         confirmVarient="danger"
       >
         <p className="text-sm text-zinc-300 leading-relaxed font-medium">
-          Are you sure you want to permanently erase this record? This action is irreversible and the manifest will be removed from Telegram.
+          {targetCount > 1 
+            ? `Are you sure you want to permanently erase these ${targetCount} items? This action is irreversible and the data will be removed from the cloud.`
+            : 'Are you sure you want to permanently erase this record? This action is irreversible and the data will be removed from the cloud.'
+          }
         </p>
       </Dialog>
 
@@ -139,7 +146,7 @@ export const FileModals: React.FC<FileModalsProps> = ({
       {activeModal === 'conflict' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl p-8">
+          <div className="relative bg-[#0a0a0c] border border-zinc-800/80 rounded-2xl w-full max-w-md shadow-2xl p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
                 <AlertTriangle size={20} />
@@ -154,19 +161,19 @@ export const FileModals: React.FC<FileModalsProps> = ({
             <div className="flex flex-col gap-3">
               <button 
                 onClick={() => onConflictAction?.('overwrite')}
-                className="w-full py-4 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-lg active:scale-95"
+                className="w-full py-4 rounded-xl bg-red-600/20 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-widest hover:bg-red-600/30 hover:border-red-500/50 hover:text-red-300 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all active:scale-95"
               >
                 Overwrite Existing
               </button>
               <button 
                 onClick={() => onConflictAction?.('duplicate')}
-                className="w-full py-4 rounded-xl bg-zinc-800 text-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-700 transition-all active:scale-95"
+                className="w-full py-4 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-black uppercase tracking-widest hover:bg-blue-600/30 hover:border-blue-500/50 hover:text-blue-300 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] transition-all active:scale-95"
               >
                 Upload as Duplicate
               </button>
               <button 
                 onClick={() => onConflictAction?.('cancel')}
-                className="w-full py-4 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-all active:scale-95"
+                className="w-full py-4 rounded-xl bg-[#050505] border border-zinc-800/80 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 hover:text-zinc-300 hover:border-zinc-700 transition-all active:scale-95"
               >
                 Abort Action
               </button>

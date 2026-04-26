@@ -23,9 +23,12 @@ import { FilePickerModal } from './FilePickerModal';
 interface NoteEditorProps {
   note: NoteInfo | null;
   onClose: () => void;
-  onSave: (id: string | null, content: string) => void;
-  onDelete: (id: string) => void;
+  onSave: (id: string | null, content: string) => Promise<void>;
   onUpdate: (note: NoteInfo, content: string) => Promise<void>;
+  onDelete: (id: string) => void;
+  onAttach: (fileId: string) => Promise<void>;
+  onDetach: (fileId: string) => Promise<void>;
+  isCreating: boolean;
 }
 
 interface FileManifest {
@@ -36,10 +39,13 @@ interface FileManifest {
 
 export const NoteEditor: React.FC<NoteEditorProps> = ({ 
   note, 
-  onClose, 
+  onClose,
   onSave, 
+  onUpdate, 
   onDelete,
-  onUpdate
+  onAttach,
+  onDetach,
+  isCreating 
 }) => {
   const [content, setContent] = useState('');
   const [isModified, setIsModified] = useState(false);
@@ -87,7 +93,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       if (isNew || isModified) {
         if (isNew) {
-           onSave(null, content);
+           await onSave(null, content);
         } else if (note) {
            await onUpdate(note, content);
         }
@@ -100,35 +106,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleAttachFile = async (fileId: string) => {
     if (!note) return;
-    try {
-      await invoke('note_attach_file', {
-        accountId: note.account_id,
-        noteId: note.id,
-        fileId
-      });
-      setIsPickerOpen(false);
-      // Construct updated list of IDs locally
-      const updatedIds = (note.attachment_ids ? note.attachment_ids + ',' : '') + fileId;
-      fetchAttachmentInfo(updatedIds);
-    } catch (e) {
-      alert('Failed to attach file: ' + e);
-    }
+    setIsPickerOpen(false);
+    await onAttach(fileId);
   };
 
   const handleDetachFile = async (fileId: string) => {
     if (!note) return;
     if (!window.confirm('Remove this attachment?')) return;
-    try {
-      await invoke('note_detach_file', {
-        accountId: note.account_id,
-        noteId: note.id,
-        fileId
-      });
-      const updatedIds = (note.attachment_ids || '').split(',').filter(id => id !== fileId).join(',');
-      fetchAttachmentInfo(updatedIds);
-    } catch (e) {
-      alert('Failed to detach file: ' + e);
-    }
+    await onDetach(fileId);
   };
 
   const handleOpenFile = async (fileId: string) => {
@@ -170,7 +155,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               </h2>
               <div className="flex items-center gap-2">
                 <p className="text-[12px] font-bold text-zinc-400">
-                  {isNew ? 'Draft' : note?.id.slice(0, 16).toUpperCase()}
+                  {isNew ? 'Draft' : note?.id?.slice(0, 16).toUpperCase() || 'N/A'}
                 </p>
                 {isReadOnly && (
                   <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[8px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1">
@@ -183,28 +168,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-             {!isReadOnly && (
-               <button 
-                 onClick={handleSave}
-                 disabled={!isModified && !isNew}
-                 className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all
-                   ${isModified || isNew ? 'bg-white text-black hover:bg-zinc-200 shadow-lg' : 'bg-zinc-900 text-zinc-700 cursor-default'}`}
-               >
-                 <Save size={14} />
-                 <span>{isNew ? 'Create' : 'Save'}</span>
-               </button>
-             )}
+              {!isReadOnly && (
+                <button 
+                  onClick={handleSave}
+                  disabled={!isModified && !isNew}
+                  className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all
+                    ${isModified || isNew ? 'bg-zinc-100 text-black hover:bg-white shadow-lg active:scale-95' : 'bg-zinc-900 text-zinc-700 cursor-default'}`}
+                >
+                  <Save size={14} />
+                  <span>{isNew ? 'Create' : 'Save Changes'}</span>
+                </button>
+              )}
 
-             {isReadOnly && (
-               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                 <Lock size={12} className="text-zinc-700" />
-                 <span>Forwarded</span>
-               </div>
-             )}
+              {isReadOnly && (
+                <div className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-zinc-900/80 border border-zinc-800 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                  <Lock size={12} className="text-zinc-700" />
+                  <span>Forwarded Note</span>
+                </div>
+              )}
 
              {!isNew && (
                <button 
-                 onClick={() => { if(confirm('Delete this note?')) onDelete(note!.id); }}
+                 onClick={() => onDelete(note!.id)}
                  className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-95"
                  title="Delete Note"
                >
@@ -259,14 +244,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                        <Loader2 size={16} className="animate-spin" />
                     </div>
                   ) : attachedFiles.length === 0 ? (
-                    <div className="col-span-full py-3 px-4 rounded-xl border border-dashed border-zinc-900 text-[10px] font-bold text-zinc-700 italic">
-                      No files linked to this note
+                    <div className="col-span-full py-4 px-5 rounded-lg border border-dashed border-zinc-800/50 bg-zinc-950/30 text-[10px] font-bold text-zinc-700 uppercase tracking-tight italic flex items-center justify-center">
+                      No linked resource objects detected
                     </div>
                   ) : (
                     attachedFiles.map(file => (
                       <div 
                         key={file.id} 
-                        className="group relative flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-900 rounded-xl hover:border-zinc-800 transition-all cursor-pointer shadow-sm"
+                        className="group relative flex items-center gap-3 p-3 bg-zinc-950/80 border border-zinc-900 rounded-lg hover:border-zinc-700 transition-all cursor-pointer shadow-sm hover:shadow-xl"
                         onClick={() => handleOpenFile(file.id)}
                       >
                          <div className="p-2 rounded-lg bg-zinc-900 group-hover:bg-blue-500/10 text-zinc-500 group-hover:text-blue-500 transition-colors">
@@ -308,9 +293,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">From</span>
-                      <span className={`text-[10px] font-bold ${!note.from_self ? 'text-blue-500' : 'text-zinc-400'}`}>
-                        {note.sender_name || 'System'}
-                        {!note.from_self && ' (Cloud)'}
+                      <span className={`text-[10px] font-bold ${note && !note.from_self ? 'text-blue-500' : 'text-zinc-400'}`}>
+                        {note?.sender_name || 'System'}
+                        {note && !note.from_self && ' (Cloud)'}
                       </span>
                     </div>
                   </div>
@@ -322,7 +307,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                     <div className="flex flex-col">
                       <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Date</span>
                       <span className="text-[10px] font-bold text-zinc-400">
-                        {new Date(note.created_at * 1000).toLocaleString()}
+                        {note ? new Date(note.created_at * 1000).toLocaleString() : '---'}
                       </span>
                     </div>
                   </div>

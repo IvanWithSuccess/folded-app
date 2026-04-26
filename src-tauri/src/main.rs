@@ -14,12 +14,12 @@ use crate::session_manager::SessionManager;
 use crate::cluster::ClusterOrchestrator;
 use crate::cache::MetadataCache;
 use crate::webdav::WebDavBridge;
+use crate::cluster::mirrors::MirrorManager;
 use std::sync::Arc;
 use std::collections::HashSet;
 use tokio::sync::Mutex as TokioMutex;
 use tauri::tray::TrayIconBuilder;
 use tauri::menu::{Menu, MenuItem};
-use anyhow::Result;
 use tauri::Manager;
 
 pub struct SyncTracker {
@@ -79,7 +79,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::clone(&session_manager))
         .manage(Arc::clone(&webdav_bridge))
-        .manage(cluster_orchestrator)
+        .manage(Arc::clone(&cluster_orchestrator))
         .manage(Arc::clone(&metadata_cache))
         .manage(sync_tracker)
         .on_window_event(|window: &tauri::Window, event| {
@@ -97,6 +97,27 @@ fn main() {
             }
         })
         .setup(move |app: &mut tauri::App| {
+            let mirror_manager = Arc::new(MirrorManager::new(
+                app.handle().clone(),
+                Arc::clone(&metadata_cache),
+                Arc::clone(&cluster_orchestrator),
+                Arc::clone(&session_manager),
+            ));
+            app.manage(Arc::clone(&mirror_manager));
+            
+            let task_manager = Arc::new(crate::cluster::task_manager::TaskManager::new(
+                app.handle().clone(),
+                Arc::clone(&metadata_cache),
+                Arc::clone(&cluster_orchestrator),
+                Arc::clone(&session_manager),
+            ));
+            app.manage(Arc::clone(&task_manager));
+
+            let task_manager_clone = Arc::clone(&task_manager);
+            tauri::async_runtime::spawn(async move {
+                task_manager_clone.start().await;
+            });
+
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>).unwrap();
             let show_i = MenuItem::with_id(app, "show", "Open Folded Cloud", true, None::<&str>).unwrap();
             let menu = Menu::with_items(app, &[&show_i, &quit_i]).unwrap();
@@ -116,6 +137,11 @@ fn main() {
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "quit" => {
+                            let cache = app.state::<Arc<MetadataCache>>();
+                            let mount_path = tauri::async_runtime::block_on(async {
+                                cache.get_setting("mount_path").await.unwrap_or(None)
+                            });
+                            let _ = crate::os_integration::unmount_drive("Z:", mount_path);
                             std::process::exit(0);
                         }
                         "show" => {
@@ -157,11 +183,15 @@ fn main() {
             let session_manager = Arc::clone(&session_manager);
             let cache_for_setup = Arc::clone(&metadata_cache);
             let metadata_cache = Arc::clone(&metadata_cache);
+            let mirror_manager_clone = Arc::clone(&mirror_manager);
 
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = session_manager.load_sessions().await {
                     eprintln!("Failed to load saved sessions: {}", e);
                 }
+                
+                // Start mirroring engine
+                let _ = mirror_manager_clone.start_all().await;
 
                 let active_ids: Vec<String> = session_manager.get_active_accounts().await
                     .iter().map(|a| a.id.clone()).collect();
@@ -192,9 +222,10 @@ fn main() {
                         .unwrap_or("true".into()) == "true";
                     
                     if mount_enabled {
+                        let mount_path = cache_for_mount.get_setting("mount_path").await.unwrap_or(None);
                         log::info!("Initiating virtual drive mount for native streaming in 2000ms...");
                         tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-                        let _ = crate::os_integration::mount_drive(9876, "Z:");
+                        let _ = crate::os_integration::mount_drive(9876, "Z:", mount_path);
                     } else {
                         log::info!("Virtual drive mount disabled in settings, skipping.");
                     }
@@ -235,11 +266,32 @@ fn main() {
         .expect("error while building tauri application");
 
     app.run(|app_handle: &tauri::AppHandle, event: tauri::RunEvent| {
-        if let tauri::RunEvent::Reopen { .. } = event {
-            if let Some(window) = app_handle.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+        match event {
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                let cache = app_handle.state::<Arc<MetadataCache>>();
+                let close_to_tray = tauri::async_runtime::block_on(async {
+                    cache.get_setting("close_to_tray").await.ok().flatten().unwrap_or_else(|| "true".into())
+                }) == "true";
+
+                if close_to_tray {
+                    api.prevent_exit();
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                } else {
+                    let mount_path = tauri::async_runtime::block_on(async {
+                        cache.get_setting("mount_path").await.unwrap_or(None)
+                    });
+                    let _ = crate::os_integration::unmount_drive("Z:", mount_path);
+                }
             }
+            tauri::RunEvent::Reopen { .. } => {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            _ => {}
         }
     });
 }

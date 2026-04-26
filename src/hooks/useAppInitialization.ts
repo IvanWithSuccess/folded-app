@@ -17,17 +17,9 @@ export function useAppInitialization() {
     setSyncStatus('Indexing messages...', 20);
     
     try {
-      // 1. Full index: scans Telegram messages, indexes notes
-      setSyncStatus('Indexing database...', 30);
-      await invoke('cluster_index_account', { accountId: account.id });
-      
-      // 2. Explicitly pull manifest to reconstruct folders (best-effort)
-      setSyncStatus('Fetching cloud structure...', 70);
-      try {
-        await invoke('pull_manifest', { accountId: account.id });
-      } catch (e) {
-        console.warn('Manifest pull skipped or failed:', e);
-      }
+      // 1. Full intelligent sync: manifest pull + burst message index + starts background crawler
+      setSyncStatus('Synchronizing cloud storage...', 40);
+      await invoke('sync_account', { accountId: account.id });
       
       setSyncStatus('Ready', 100);
     } catch (e) {

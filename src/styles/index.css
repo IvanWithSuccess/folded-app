@@ -94,3 +94,20 @@ html, body {
 .context-menu-enter {
   animation: contextMenuIn 0.12s ease-out forwards;
 }
+
+/* Custom Scrollbar Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mask-fade-right {
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+
+.mask-fade-left {
+  mask-image: linear-gradient(to left, black 85%, transparent 100%);
+}

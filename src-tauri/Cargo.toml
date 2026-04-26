@@ -18,6 +18,8 @@ dav-server = "0.5"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.10"
+mime_guess = "2.0"
+urlencoding = "2.1"
 uuid = { version = "1.0", features = ["v4"] }
 chrono = "0.4"
 base64 = "0.21"
@@ -33,6 +35,7 @@ http_02 = { version = "0.2", package = "http" }
 http_body_04 = { version = "0.4", package = "http-body" }
 zip = "2.1.0"
 tokio-stream = { version = "0.1.18", features = ["fs"] }
+notify = "6.1.1"
 
 [build-dependencies]
 tauri-build = { version = "2.1.1", features = [] }

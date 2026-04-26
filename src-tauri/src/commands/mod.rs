@@ -5,6 +5,8 @@ pub mod cluster;
 pub mod system;
 pub mod settings;
 pub mod cache;
+pub mod mirrors;
+pub mod versions;
 
 #[macro_export]
 macro_rules! generate_handler {
@@ -30,6 +32,10 @@ macro_rules! generate_handler {
             $crate::commands::fs::copy_item,
             $crate::commands::fs::global_search,
             $crate::commands::fs::get_item_path,
+            $crate::commands::fs::toggle_item_starred,
+            $crate::commands::fs::get_category_content,
+            $crate::commands::fs::get_item_history,
+            $crate::commands::fs::get_active_tasks,
             
             $crate::commands::notes::get_notes,
             $crate::commands::notes::update_note,
@@ -57,6 +63,8 @@ macro_rules! generate_handler {
             $crate::commands::system::mount_drive,
             $crate::commands::system::unmount_drive,
             $crate::commands::system::download_items_to_path,
+            $crate::commands::system::create_alias,
+            $crate::commands::system::get_home_dir,
             
             $crate::commands::settings::get_setting,
             $crate::commands::settings::update_setting,
@@ -64,7 +72,19 @@ macro_rules! generate_handler {
 
             $crate::commands::cache::get_cache_stats,
             $crate::commands::cache::clear_file_cache,
-            $crate::commands::cache::evict_cache
+            $crate::commands::cache::evict_cache,
+
+            $crate::commands::mirrors::get_mirror_rules,
+            $crate::commands::mirrors::add_mirror_rule,
+            $crate::commands::mirrors::remove_mirror_rule,
+            $crate::commands::mirrors::toggle_mirror_rule,
+
+            $crate::commands::versions::get_file_versions,
+            $crate::commands::versions::restore_file_version,
+            $crate::commands::versions::download_file_version,
+            $crate::commands::versions::get_folder_history,
+            $crate::commands::versions::restore_deleted_item,
+            $crate::commands::versions::delete_file_with_all_versions
         ]
     };
 }

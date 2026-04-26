@@ -89,23 +89,59 @@ export function useNotes() {
         noteId: note.id
       });
       await fetchNotes();
-    } catch (e) {
-      alert('Failed to delete note: ' + e);
+    } catch (e: any) {
+      console.error('Delete failed:', e);
+      alert('Failed to delete note: ' + (e?.message || e || 'Unknown error'));
     }
   }, [fetchNotes]);
 
   const handleCreate = useCallback(async (content: string) => {
     if (!activeAccountId || !content.trim()) return;
     try {
-      await invoke('create_note', {
+      const newNote = await invoke<NoteInfo>('create_note', {
         accountId: activeAccountId,
         content
       });
       await fetchNotes();
-    } catch (e) {
-      alert('Failed to create note: ' + e);
+      return newNote;
+    } catch (e: any) {
+      console.error('Create failed:', e);
+      alert('Failed to create note: ' + (e?.message || e || 'Unknown error'));
+      return null;
     }
   }, [activeAccountId, fetchNotes]);
+
+  const handleAttach = useCallback(async (noteId: string, fileId: string) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    try {
+      await invoke('note_attach_file', {
+        accountId: note.account_id,
+        noteId: note.id,
+        fileId
+      });
+      await fetchNotes();
+    } catch (e: any) {
+      console.error('Attach failed:', e);
+      alert('Failed to attach: ' + (e?.message || e || 'Unknown error'));
+    }
+  }, [notes, fetchNotes]);
+
+  const handleDetach = useCallback(async (noteId: string, fileId: string) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    try {
+      await invoke('note_detach_file', {
+        accountId: note.account_id,
+        noteId: note.id,
+        fileId
+      });
+      await fetchNotes();
+    } catch (e: any) {
+      console.error('Detach failed:', e);
+      alert('Failed to detach: ' + (e?.message || e || 'Unknown error'));
+    }
+  }, [notes, fetchNotes]);
 
   useEffect(() => {
     fetchNotes();
@@ -120,6 +156,8 @@ export function useNotes() {
     handleSync,
     handleUpdate,
     handleDelete,
-    handleCreate
+    handleCreate,
+    handleAttach,
+    handleDetach
   };
 }

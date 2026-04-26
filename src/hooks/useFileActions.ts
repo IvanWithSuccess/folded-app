@@ -59,19 +59,24 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
     }
   }, [path, refresh]);
 
-  const handleDelete = useCallback(async (item: SelectableItem) => {
+  const handleDelete = useCallback(async (items: SelectableItem[]) => {
+    setIsLoading(true);
     try {
-      if (isFolder(item)) {
-        await invoke('delete_folder', { folderId: item.id });
-      } else {
-        await invoke('cluster_delete_file', { fileId: item.id });
+      for (const item of items) {
+        if (isFolder(item)) {
+          await invoke('delete_folder', { folderId: item.id });
+        } else {
+          await invoke('cluster_delete_file', { fileId: item.id });
+        }
       }
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
       alert('Delete failed: ' + e);
+    } finally {
+      setIsLoading(false);
     }
-  }, [path, refresh]);
+  }, [activeDriveId, path, refresh, setIsLoading]);
 
   const handleDownload = useCallback(async (item: SelectableItem) => {
     if (isFolder(item)) return;
@@ -180,14 +185,43 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
     }
   }, [activeDriveId, path, refresh, setIsLoading]);
 
+  const handleToggleStarred = useCallback(async (item: SelectableItem) => {
+    try {
+      await invoke('toggle_item_starred', {
+        id: item.id,
+        itemType: isFolder(item) ? 'folder' : 'file',
+        starred: !item.is_starred
+      });
+      await invoke('push_manifest', { accountId: activeDriveId });
+      await refresh(path);
+    } catch (e) {
+      alert('Failed to toggle starred: ' + e);
+    }
+  }, [activeDriveId, path, refresh]);
+
+  const handleDeleteWithVersions = useCallback(async (file: FileManifest) => {
+    setIsLoading(true);
+    try {
+      await invoke('delete_file_with_all_versions', { fileId: file.id });
+      await invoke('push_manifest', { accountId: activeDriveId });
+      await refresh(path);
+    } catch (e) {
+      alert('Delete with versions failed: ' + e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeDriveId, path, refresh, setIsLoading]);
+
   return {
     handleSync,
     handleCreateFolder,
     handleRename,
     handleDelete,
+    handleDeleteWithVersions,
     handleDownload,
     handlePasteItems,
     handleDownloadToSpecificPath,
-    handleUploadFile
+    handleUploadFile,
+    handleToggleStarred
   };
 }

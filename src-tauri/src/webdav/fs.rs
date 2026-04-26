@@ -39,21 +39,26 @@ impl ClusterFs {
 
     async fn resolve_path(&self, path: &DavPath) -> FsResult<VirtualEntry> {
         let url_str = path.as_url_string();
-        let mut segments: Vec<&str> = url_str.split('/').filter(|s| !s.is_empty()).collect();
+        // Decode URL to handle spaces and special characters
+        let decoded_path = urlencoding::decode(&url_str).map(|s| s.into_owned()).unwrap_or(url_str.clone());
+        log::debug!("WebDAV: Resolving path: {} (decoded: {})", url_str, decoded_path);
+        
+        let mut segments: Vec<String> = decoded_path.split('/').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
         
         // Trick for macOS Finder naming: 
         // If we mount http://127.0.0.1:9876/FoldedCloud, Finder will name the drive "FoldedCloud".
         // We need to ignore this first segment if it matches our desired display name.
-        if segments.get(0) == Some(&"FoldedCloud") {
+        if segments.get(0).map(|s| s.as_str()) == Some("FoldedCloud") {
             segments.remove(0);
         }
-
+        
+        // ... (rest of the logic stays same but using decoded segments)
         if segments.is_empty() {
             return Ok(VirtualEntry::Root);
         }
 
         let accounts = self.session_manager.get_active_accounts().await;
-        let account_display_name = segments[0];
+        let account_display_name = segments[0].clone();
         
         let target_account = accounts.iter().find(|acc| {
             Self::get_account_display_name(acc) == account_display_name
@@ -63,18 +68,16 @@ impl ClusterFs {
             return Ok(VirtualEntry::AccountRoot(target_account.clone()));
         }
 
-        // Navigate through folders in the database
         let mut current_folder_id: Option<String> = None;
         let account_id = &target_account.id;
 
         for (i, segment) in segments.iter().enumerate().skip(1) {
             let is_last = i == segments.len() - 1;
 
-            // Search for folder first
             let folders = self.cache.get_folders_in(current_folder_id.clone(), Some(account_id.clone())).await
                 .map_err(|_| FsError::GeneralFailure)?;
             
-            if let Some(folder) = folders.into_iter().find(|f| f.name == *segment) {
+            if let Some(folder) = folders.into_iter().find(|f| &f.name == segment) {
                 if is_last {
                     return Ok(VirtualEntry::Folder(folder));
                 }
@@ -82,12 +85,11 @@ impl ClusterFs {
                 continue;
             }
 
-            // If not found and it's the last segment, it might be a file
             if is_last {
                 let files = self.cache.get_files_in(current_folder_id.clone(), Some(account_id.clone())).await
                     .map_err(|_| FsError::GeneralFailure)?;
                 
-                if let Some(file) = files.into_iter().find(|f| f.name == *segment) {
+                if let Some(file) = files.into_iter().find(|f| &f.name == segment) {
                     return Ok(VirtualEntry::File(file));
                 }
             }
@@ -512,7 +514,7 @@ impl DavFile for UploadDavFile {
             use tokio::io::AsyncWriteExt;
             self.file.flush().await.map_err(|_| FsError::GeneralFailure)?;
             tokio::spawn(async move {
-                let manifest_res = orchestrator.upload_file(temp_path.clone(), session_manager, name, None, fid, aid).await;
+                let manifest_res = orchestrator.upload_file(temp_path.clone(), session_manager, Arc::clone(&cache), name, None, fid, aid, None).await;
                 if let Ok(manifest) = manifest_res { let _ = cache.save_file(manifest).await; }
                 let _ = tokio::fs::remove_file(temp_path).await;
             });

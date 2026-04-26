@@ -1,13 +1,111 @@
-```
-dist/
-**/*.pyc
-__pycache__/
+# Logs
+logs
 *.log
-*.tmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+tsc_errors.log
+build.log
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript v1 declaration files
+typings/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variable files
 .env
+.env.development.local
+.env.test.local
+.env.production.local
 .env.local
 *.env.*
-.vscode/
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+out
+
+# Nuxt.js build output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+# Comment in the public line if your project uses Gatsby and you want to debug the
+# build output
+# public
+
+# vue-cli build output
+dist/
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VS Code state settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/stylelint.json
+!.vscode/arduino.json
+
+# IDEs
 .idea/
-node_modules/
-```
+
+# Rust/Cargo
+/src-tauri/target/
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Tauri
+src-tauri/binaries
+src-tauri/gen
+src-tauri/cache
+src-tauri/dump.rdb
+
+# Folded app specific
+sessions/
+scratch/
+*.tmp
+.DS_Store
+
+# End of .gitignore

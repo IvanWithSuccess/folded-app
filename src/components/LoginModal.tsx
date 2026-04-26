@@ -150,19 +150,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
   };
 
   return (
-    <div className="fixed inset-0 bg-zinc-950 flex z-[2000] p-6 sm:p-12 overflow-y-auto overflow-x-hidden">
-      {/* Background decoration */}
+    <div className="fixed inset-0 bg-[#09090b] flex z-[2000] p-6 sm:p-12 overflow-y-auto overflow-x-hidden animate-in fade-in duration-300">
+      {/* Background decoration - subtle zinc/blue glow */}
       <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-zinc-600/5 blur-[120px] rounded-full"></div>
       </div>
 
       <motion.div 
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-[800px] m-auto flex flex-col items-center relative z-10"
       >
-
         <div className="w-full max-w-[320px]">
             <AnimatePresence mode="wait">
               <motion.div 
@@ -173,52 +172,51 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
                 className="flex flex-col items-center w-full"
               >
                 {error && (
-                  <div className="w-full mb-8 p-4 bg-red-950/20 border border-red-900/30 rounded-2xl flex items-center gap-3 text-red-400 text-sm">
-                     <AlertCircle size={18} className="shrink-0" />
+                  <div className="w-full mb-8 p-3 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-3 text-red-400 text-[11px] font-bold uppercase tracking-tight">
+                     <AlertCircle size={14} className="shrink-0" />
                      {error}
                   </div>
                 )}
 
                 {step === 'qr' && (
                   <div className="flex flex-col items-center w-full">
-                    <div className="p-6 bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] relative mb-8 group transition-all duration-500 hover:scale-[1.02]">
+                    <div className="p-4 bg-white rounded-lg shadow-2xl relative mb-10 group transition-all duration-500 hover:scale-[1.02] border-4 border-zinc-900">
                       {qrUri ? (
                         <div className="relative">
                             <QRCode value={qrUri} size={180} level="H" />
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 backdrop-blur-[2px] rounded-lg">
-                                <span className="text-[10px] font-bold text-black uppercase tracking-widest bg-white/90 px-3 py-1 rounded-full shadow-sm">Scan with Telegram</span>
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/40 backdrop-blur-[1px]">
+                                <span className="text-[9px] font-black text-black uppercase tracking-widest bg-white/90 px-3 py-1 rounded border border-black/10">Scan with Telegram</span>
                             </div>
                         </div>
                       ) : (
-                        <div className="w-[180px] h-[180px] flex flex-col items-center justify-center bg-zinc-50 rounded-2xl gap-4">
+                        <div className="w-[180px] h-[180px] flex flex-col items-center justify-center bg-zinc-50 rounded gap-4">
                           <Loader2 size={32} className="animate-spin text-zinc-300" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Generating Link</span>
+                          <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Generating Link</span>
                         </div>
                       )}
                     </div>
 
                     <div className="space-y-6 text-center w-full">
                       <div className="space-y-2">
-                        <p className="text-white font-semibold text-lg">Quick Login with QR</p>
-                        <p className="text-zinc-500 text-xs sm:text-sm leading-relaxed">
-                          Open Telegram on your phone <br />
-                          Go to <b>Settings &gt; Devices &gt; Link Desktop</b>
+                        <p className="text-white font-black text-xs uppercase tracking-[0.2em]">Quick Auth Pulse</p>
+                        <p className="text-zinc-500 text-[10px] font-medium leading-relaxed uppercase tracking-widest">
+                          Settings &gt; Devices &gt; Link Desktop
                         </p>
                       </div>
 
                       <div className="relative py-3 flex items-center justify-center">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-zinc-800"></div>
+                          <div className="w-full border-t border-zinc-900"></div>
                         </div>
-                        <span className="relative px-4 bg-zinc-950 text-zinc-600 text-[10px] font-black uppercase tracking-[0.2em]">OR</span>
+                        <span className="relative px-4 bg-[#09090b] text-zinc-700 text-[9px] font-black uppercase tracking-[0.3em]">Identity Hub</span>
                       </div>
 
                       <button 
-                         className="w-full py-4 sm:py-3.5 text-sm font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all flex items-center justify-center gap-3 group border border-transparent hover:border-white/10"
+                         className="w-full py-3.5 text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 hover:text-white hover:bg-zinc-900/50 rounded-lg transition-all flex items-center justify-center gap-3 group border border-zinc-800"
                          onClick={() => { setStep('phone'); setMethod('phone'); }}
                       >
-                         <Phone size={18} className="text-zinc-500 group-hover:text-white transition-colors" />
-                         Log in by Phone Number
+                         <Phone size={14} className="text-zinc-600 group-hover:text-blue-500 transition-colors" />
+                         Use Phone Number
                       </button>
                     </div>
                   </div>
@@ -226,31 +224,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
 
                 {step === 'phone' && (
                     <div className="space-y-6 w-full">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Phone Number</label>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black uppercase tracking-[0.25em] text-zinc-600 ml-1">Identity Terminal</label>
                       <input 
                         type="text" 
-                        className="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-white placeholder:text-zinc-700 outline-none focus:ring-2 focus:ring-white/20 focus:border-white transition-all font-mono text-base" 
-                        placeholder="+1 234 567 8900" 
+                        className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-lg text-white placeholder:text-zinc-800 outline-none focus:border-zinc-600 transition-all font-mono text-sm" 
+                        placeholder="+0 000 000 0000" 
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         autoFocus
                       />
                     </div>
                     <button 
-                      className="w-full py-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
+                      className="w-full py-3.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
                       onClick={handleRequestCode}
                       disabled={loading}
                     >
-                      {loading ? <Loader2 size={18} className="animate-spin" /> : "Next"}
-                      {!loading && <ArrowRight size={18} />}
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : "Request Access"}
+                      {!loading && <ArrowRight size={14} />}
                     </button>
                     
                     <button 
-                       className="w-full py-2 text-sm font-bold text-zinc-500 hover:text-zinc-300 transition-colors"
+                       className="w-full py-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
                        onClick={() => { setStep('qr'); setMethod('qr'); }}
                     >
-                       Back to QR Scan
+                       Return to QR
                     </button>
                   </div>
                 )}
@@ -258,32 +256,32 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
                 {step === 'code' && (
                   <div className="space-y-8 text-center w-full">
                     <div className="space-y-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Security Code</p>
+                      <p className="text-[9px] font-black uppercase tracking-[0.25em] text-zinc-600">Verification Code</p>
                       <input 
                         type="text" 
-                        className="w-full bg-transparent border-b-2 border-zinc-800 py-4 text-white text-center text-4xl font-mono tracking-[0.3em] outline-none focus:border-white transition-all" 
+                        className="w-full bg-transparent border-b border-zinc-800 py-4 text-white text-center text-3xl font-mono tracking-[0.5em] outline-none focus:border-blue-500 transition-all" 
                         placeholder="•••••" 
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
                         maxLength={5}
                         autoFocus
                       />
-                      <p className="text-zinc-500 text-xs sm:text-sm">A code was sent to your Telegram account</p>
+                      <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-widest">Awaiting code from Telegram</p>
                     </div>
                     
                     <button 
-                      className="w-full py-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
+                      className="w-full py-3.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
                       onClick={handleVerifyCode}
                       disabled={loading}
                     >
-                      {loading ? <Loader2 size={18} className="animate-spin" /> : "Confirm"}
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : "Authenticate"}
                     </button>
                     
                     <button 
-                      className="text-xs font-bold text-zinc-500 hover:text-zinc-300 transition-colors"
+                      className="text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
                       onClick={() => setStep('phone')}
                     >
-                      Change Number
+                      Wrong Number?
                     </button>
                   </div>
                 )}
@@ -292,41 +290,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
                   <div className="space-y-6 w-full">
                     <div className="space-y-5">
                       <div className="flex flex-col items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
-                            <ShieldCheck size={20} className="text-white" />
+                        <div className="w-10 h-10 bg-zinc-900 rounded-lg flex items-center justify-center border border-zinc-800">
+                            <ShieldCheck size={20} className="text-blue-500" />
                         </div>
-                        <p className="text-base font-bold text-white">Cloud Password</p>
-                        <p className="text-zinc-500 text-xs text-center px-4">Your account is protected by 2-Step Verification.</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Security Override</p>
+                        <p className="text-zinc-600 text-[10px] font-medium uppercase tracking-widest text-center px-4">Two-Step Verification Active</p>
                       </div>
                       <input 
                         type="password" 
-                        className="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-white placeholder:text-zinc-700 outline-none focus:ring-2 focus:ring-white/20 focus:border-white transition-all text-base" 
-                        placeholder="Password" 
+                        className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-lg text-white placeholder:text-zinc-800 outline-none focus:border-zinc-600 transition-all text-sm font-mono" 
+                        placeholder="••••••••" 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         autoFocus
                       />
                     </div>
                     <button 
-                      className="w-full py-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
+                      className="w-full py-3.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
                       onClick={handleVerifyPassword}
                       disabled={loading}
                     >
-                      {loading ? <Loader2 size={18} className="animate-spin" /> : "Connect Account"}
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : "Authorize Node"}
                     </button>
                     <button 
-                      className="w-full py-2 text-xs font-bold text-zinc-500 hover:text-zinc-300 transition-colors"
+                      className="w-full py-2 text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
                       onClick={() => setStep('phone')}
                     >
-                      Cancel
+                      Abort
                     </button>
                   </div>
                 )}
               </motion.div>
             </AnimatePresence>
         </div>
-
-
       </motion.div>
     </div>
   );
