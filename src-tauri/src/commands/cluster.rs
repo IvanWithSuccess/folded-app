@@ -112,8 +112,10 @@ pub async fn sync_account(
 
 
     let mut active = sync_tracker.active_crawlers.lock().await;
-    if !active.contains(&account_id) {
-        active.insert(account_id.clone());
+    if !active.contains_key(&account_id) {
+        let token = tokio_util::sync::CancellationToken::new();
+        active.insert(account_id.clone(), token.clone());
+        
         let account_id_clone = account_id.clone();
         let session_clone = Arc::clone(&session_state);
         let cluster_clone = Arc::clone(&cluster_state);
@@ -123,11 +125,22 @@ pub async fn sync_account(
         tokio::spawn(async move {
             log::info!("Background maintenance crawler spawned for {}", account_id_clone);
             loop {
-                if let Err(e) = cluster_clone.maintenance_crawl(&account_id_clone, Arc::clone(&session_clone), Arc::clone(&cache_clone)).await {
-                    log::error!("Background crawl error for {}: {}", account_id_clone, e);
+                tokio::select! {
+                    _ = token.cancelled() => {
+                        log::info!("Crawler for {} received cancellation signal", account_id_clone);
+                        break;
+                    }
+                    crawl_res = cluster_clone.maintenance_crawl(&account_id_clone, Arc::clone(&session_clone), Arc::clone(&cache_clone)) => {
+                        if let Err(e) = crawl_res {
+                             log::error!("Background crawl error for {}: {}", account_id_clone, e);
+                        }
+                    }
                 }
                 
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                tokio::select! {
+                    _ = token.cancelled() => break,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {}
+                }
 
                 if session_clone.get_client_by_id(&account_id_clone).await.is_none() {
                     log::info!("Stopping crawler for {} - session invalid or removed", account_id_clone);

@@ -4,8 +4,9 @@ import QRCode from 'react-qr-code';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Phone, QrCode, Lock, ShieldCheck, 
-  ChevronLeft, ArrowRight, Loader2, Smartphone
+  ChevronLeft, ArrowRight, Loader2, Smartphone, AlertCircle
 } from 'lucide-react';
+import { useAppStore } from '../store/useAppStore';
 
 interface LoginModalProps {
   onClose: () => void;
@@ -322,15 +323,28 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
                 )}
               </motion.div>
             </AnimatePresence>
+            
+            {/* Stable Return button for secondary accounts */}
+            {useAppStore.getState().accounts.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-10 pt-6 border-t border-zinc-900/50 w-full"
+              >
+                <button 
+                  onClick={onClose}
+                  className="w-full py-3.5 text-[9px] font-black uppercase tracking-[0.3em] text-zinc-600 hover:text-zinc-400 transition-all flex items-center justify-center gap-2 group"
+                >
+                  <X size={12} className="group-hover:rotate-90 transition-transform duration-300" />
+                  Abort Auth
+                </button>
+              </motion.div>
+            )}
         </div>
       </motion.div>
     </div>
   );
 };
-
-const AlertCircle = ({ size, className }: { size: number, className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-);
 
 const Cloudy = ({ size, className }: { size: number, className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17.5 19c2.5 0 4.5-2 4.5-4.5 0-2.4-1.9-4.3-4.3-4.5-1-3.2-3.8-5.5-7.2-5.5-4.2 0-7.5 3.4-7.5 7.5a7.5 7.5 0 0 0 7.5 7.5h7z"/></svg>

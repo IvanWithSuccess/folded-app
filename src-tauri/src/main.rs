@@ -16,20 +16,29 @@ use crate::cache::MetadataCache;
 use crate::webdav::WebDavBridge;
 use crate::cluster::mirrors::MirrorManager;
 use std::sync::Arc;
-use std::collections::HashSet;
+use std::collections::HashMap;
+use tokio_util::sync::CancellationToken;
 use tokio::sync::Mutex as TokioMutex;
 use tauri::tray::TrayIconBuilder;
 use tauri::menu::{Menu, MenuItem};
 use tauri::Manager;
 
 pub struct SyncTracker {
-    pub active_crawlers: Arc<TokioMutex<HashSet<String>>>,
+    pub active_crawlers: Arc<TokioMutex<HashMap<String, CancellationToken>>>,
 }
 
 impl SyncTracker {
     pub fn new() -> Self {
         Self {
-            active_crawlers: Arc::new(TokioMutex::new(HashSet::new())),
+            active_crawlers: Arc::new(TokioMutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn stop_crawler(&self, account_id: &str) {
+        let mut active = self.active_crawlers.lock().await;
+        if let Some(token) = active.remove(account_id) {
+            token.cancel();
+            log::info!("Signal sent to stop crawler for account {}", account_id);
         }
     }
 }
@@ -185,6 +194,7 @@ fn main() {
             let metadata_cache = Arc::clone(&metadata_cache);
             let mirror_manager_clone = Arc::clone(&mirror_manager);
 
+            let app_handle_for_crawlers = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = session_manager.load_sessions().await {
                     eprintln!("Failed to load saved sessions: {}", e);
@@ -207,6 +217,64 @@ fn main() {
                         log::error!("Reconciliation failed: {}", e);
                     }
                 }
+
+                let active_ids_for_crawlers = active_ids.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    // Auto-start background crawlers for all active accounts
+                    for account_id in active_ids_for_crawlers {
+                        log::info!("Auto-starting background crawler for {}", account_id);
+                        let h = app_handle_for_crawlers.clone();
+                        let aid = account_id.clone();
+                        
+                        tauri::async_runtime::spawn(async move {
+                            let session_state = h.state::<Arc<SessionManager>>();
+                            let cluster_state = h.state::<Arc<ClusterOrchestrator>>();
+                            let cache_state = h.state::<Arc<MetadataCache>>();
+                            let sync_tracker = h.state::<Arc<crate::SyncTracker>>();
+                            
+                            // Perform an initial sync
+                            let _ = cluster_state.pull_manifest(&aid, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
+                            let _ = cluster_state.maintenance_crawl(&aid, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
+
+                            let mut active = sync_tracker.active_crawlers.lock().await;
+                            if !active.contains_key(&aid) {
+                                let token = tokio_util::sync::CancellationToken::new();
+                                active.insert(aid.clone(), token.clone());
+                                let session_clone = Arc::clone(&session_state);
+                                let cluster_clone = Arc::clone(&cluster_state);
+                                let cache_clone = Arc::clone(&cache_state);
+                                let tracker_clone = Arc::clone(&sync_tracker);
+                                let aid_clone = aid.clone();
+
+                                tokio::spawn(async move {
+                                    loop {
+                                        tokio::select! {
+                                            _ = token.cancelled() => {
+                                                log::info!("Auto-crawler for {} received cancellation signal", aid_clone);
+                                                break;
+                                            }
+                                            crawl_res = cluster_clone.maintenance_crawl(&aid_clone, Arc::clone(&session_clone), Arc::clone(&cache_clone)) => {
+                                                if let Err(e) = crawl_res {
+                                                    log::error!("Background crawl error for {}: {}", aid_clone, e);
+                                                }
+                                            }
+                                        }
+
+                                        tokio::select! {
+                                            _ = token.cancelled() => break,
+                                            _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {}
+                                        }
+
+                                        if session_clone.get_client_by_id(&aid_clone).await.is_none() { break; }
+                                    }
+                                    let mut active = tracker_clone.active_crawlers.lock().await;
+                                    active.remove(&aid_clone);
+                                });
+                            }
+                        });
+                    }
+                });
                 
                 let _ = tauri::async_runtime::spawn(async move {
                     if let Err(e) = WebDavBridge::start(webdav_bridge, 9876).await {

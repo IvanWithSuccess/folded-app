@@ -22,7 +22,7 @@ interface AccountManagerProps {
 }
 
 export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty }) => {
-  const { setAccounts: setGlobalAccounts } = useAppStore();
+  const { setAccounts: setGlobalAccounts, logoutAccount: logoutGlobal } = useAppStore();
   const [showLogin, setShowLogin] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +50,13 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
   const handleLogout = async (id: string) => {
     if (!window.confirm('Disconnect this account from the cloud?')) return;
     try {
+      // 1. Backend Logout
       await invoke('auth_logout', { accountId: id });
+      
+      // 2. Atomic Frontend Cleanup
+      logoutGlobal(id);
+      
+      // 3. Refresh list (which will trigger onAccountsEmpty if needed)
       fetchAccounts();
     } catch (e) {
       console.error('Logout failed:', e);

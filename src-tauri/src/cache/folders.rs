@@ -19,6 +19,13 @@ impl MetadataCache {
         Ok(id)
     }
 
+    pub async fn folder_exists(&self, folder_id: &str) -> Result<bool> {
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM folders WHERE id = ?")
+            .bind(folder_id)
+            .fetch_one(&self.pool).await?;
+        Ok(count.0 > 0)
+    }
+
     pub async fn get_folders_in(&self, parent_id: Option<String>, account_id: Option<String>) -> Result<Vec<FolderInfo>> {
         let query = match (&parent_id, &account_id) {
             (None, None) => "SELECT * FROM folders WHERE parent_id IS NULL",
@@ -92,8 +99,9 @@ impl MetadataCache {
             sqlx::query("DELETE FROM folder_history WHERE folder_id = ?")
                 .bind(fid).execute(&mut *tx).await?;
             
-            // Clear mirror rules referencing this folder
-            sqlx::query("DELETE FROM mirror_rules WHERE remote_folder_id = ?")
+            // Do NOT delete mirror rules. They are settings and should survive folder deletion.
+            // We just clear the cached folder ID so the next sync can re-resolve/re-create it.
+            sqlx::query("UPDATE mirror_rules SET remote_folder_id = NULL WHERE remote_folder_id = ?")
                 .bind(fid).execute(&mut *tx).await?;
         }
 

@@ -2,6 +2,8 @@ use tauri::State;
 use std::sync::Arc;
 use crate::session_manager::{SessionManager, AuthResponse, TelegramAccount};
 use crate::cache::MetadataCache;
+use crate::SyncTracker;
+use crate::cluster::mirrors::MirrorManager;
 
 #[tauri::command]
 pub async fn auth_request_code(state: State<'_, Arc<SessionManager>>, phone: String) -> Result<AuthResponse, String> {
@@ -32,10 +34,26 @@ pub async fn auth_poll_qr(state: State<'_, Arc<SessionManager>>) -> Result<AuthR
 pub async fn auth_logout(
     state: State<'_, Arc<SessionManager>>, 
     cache_state: State<'_, Arc<MetadataCache>>,
+    sync_tracker: State<'_, Arc<SyncTracker>>,
+    mirror_manager: State<'_, Arc<MirrorManager>>,
     account_id: String
 ) -> Result<(), String> {
+    log::info!("Initiating graceful logout for account {}", account_id);
+    
+    // 1. Stop background crawler
+    sync_tracker.stop_crawler(&account_id).await;
+    
+    // 2. Stop all associated mirrors
+    let _ = mirror_manager.stop_all_for_account(&account_id).await;
+    
+    // 3. Give it a tiny bit of time for tasks to yield (optional but safer)
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // 4. Perform actual logout and purge
     state.logout_account(&account_id).await.map_err(|e| e.to_string())?;
     let _ = cache_state.purge_account_data(&account_id).await;
+    
+    log::info!("Logout completed for account {}", account_id);
     Ok(())
 }
 

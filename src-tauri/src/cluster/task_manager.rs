@@ -15,7 +15,8 @@ struct UploadFilePayload {
     pub folder_id: Option<String>,
 }
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
+use tokio_util::sync::CancellationToken;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ pub struct TaskManager {
     orchestrator: Arc<ClusterOrchestrator>,
     session_manager: Arc<SessionManager>,
     running_tasks: Arc<Mutex<HashSet<String>>>,
+    cancellation_tokens: Arc<Mutex<HashMap<String, CancellationToken>>>,
 }
 
 impl TaskManager {
@@ -46,6 +48,7 @@ impl TaskManager {
             orchestrator,
             session_manager,
             running_tasks: Arc::new(Mutex::new(HashSet::new())),
+            cancellation_tokens: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -69,28 +72,36 @@ impl TaskManager {
             }
 
             running.insert(task.id.clone());
+            let token = CancellationToken::new();
+            {
+                let mut tokens = self.cancellation_tokens.lock().await;
+                tokens.insert(task.id.clone(), token.clone());
+            }
+
             let manager = self.clone_self();
             tokio::spawn(async move {
                 let task_id = task.id.clone();
-                if let Err(e) = manager.execute_task(task).await {
+                if let Err(e) = manager.execute_task(task, token).await {
                     log::error!("Task execution failed: {}", e);
                 }
                 let mut running = manager.running_tasks.lock().await;
                 running.remove(&task_id);
+                let mut tokens = manager.cancellation_tokens.lock().await;
+                tokens.remove(&task_id);
             });
         }
         Ok(())
     }
 
-    async fn execute_task(&self, task: PendingTask) -> Result<()> {
+    async fn execute_task(&self, task: PendingTask, token: CancellationToken) -> Result<()> {
         log::info!("Executing task {}: {}", task.id, task.task_type);
         
         self.cache.update_task_status(&task.id, "RUNNING", None).await?;
         let _ = self.app.emit("task-status-change", serde_json::json!({ "id": task.id, "status": "RUNNING" }));
 
         let result = match task.task_type.as_str() {
-            "UPLOAD_FILE" => self.handle_upload_file(&task).await,
-            "UPLOAD_FOLDER" => self.handle_upload_folder(&task).await,
+            "UPLOAD_FILE" => self.handle_upload_file(&task, token).await,
+            "UPLOAD_FOLDER" => self.handle_upload_folder(&task, token).await,
             _ => Err(anyhow::anyhow!("Unknown task type: {}", task.task_type)),
         };
 
@@ -111,7 +122,7 @@ impl TaskManager {
         Ok(())
     }
 
-    async fn handle_upload_file(&self, task: &PendingTask) -> Result<()> {
+    async fn handle_upload_file(&self, task: &PendingTask, token: CancellationToken) -> Result<()> {
         let payload: UploadFilePayload = serde_json::from_str(&task.payload)?;
         
         let manifest = self.orchestrator.upload_file(
@@ -123,7 +134,7 @@ impl TaskManager {
             payload.folder_id.clone(),
             payload.account_id.clone(),
             Some(task.id.clone()),
-            None
+            Some(token)
         ).await?;
 
         self.cache.save_file(manifest.clone()).await?;
@@ -138,7 +149,7 @@ impl TaskManager {
         Ok(())
     }
 
-    async fn handle_upload_folder(&self, task: &PendingTask) -> Result<()> {
+    async fn handle_upload_folder(&self, task: &PendingTask, token: CancellationToken) -> Result<()> {
         let payload: UploadFolderPayload = serde_json::from_str(&task.payload)?;
         let root_path = std::path::PathBuf::from(&payload.directory_path);
         
@@ -161,10 +172,20 @@ impl TaskManager {
         it.next(); 
 
         for entry in it {
+            if token.is_cancelled() {
+                return Err(anyhow::anyhow!("Task cancelled"));
+            }
             let entry = entry?;
             let path = entry.path().to_path_buf();
             let parent = path.parent().unwrap_or(&root_path);
             let remote_parent_id = folder_mapping.get(parent).cloned().unwrap_or_default();
+            
+            // CRITICAL: Check if the folder we are uploading into still exists in the DB
+            // If the user deleted it in the UI, we should stop the task immediately.
+            if !remote_parent_id.is_empty() && !self.cache.folder_exists(&remote_parent_id).await.unwrap_or(false) {
+                log::info!("TaskManager: Target folder {} deleted, stopping upload folder task", remote_parent_id);
+                return Ok(());
+            }
 
             if entry.file_type().is_dir() {
                 let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
@@ -185,7 +206,7 @@ impl TaskManager {
                     Some(remote_parent_id), 
                     payload.account_id.clone(),
                     None,
-                    None
+                    Some(token.clone())
                 ).await?;
                 
                 self.cache.save_file(manifest).await?;
@@ -202,6 +223,40 @@ impl TaskManager {
             orchestrator: Arc::clone(&self.orchestrator),
             session_manager: Arc::clone(&self.session_manager),
             running_tasks: Arc::clone(&self.running_tasks),
+            cancellation_tokens: Arc::clone(&self.cancellation_tokens),
         })
+    }
+
+    pub async fn cancel_task(&self, task_id: &str) {
+        let tokens = self.cancellation_tokens.lock().await;
+        if let Some(token) = tokens.get(task_id) {
+            log::info!("Cancelling task {}", task_id);
+            token.cancel();
+        }
+    }
+
+    pub async fn cancel_tasks_by_folder(&self, folder_id: &str) {
+        let tasks = match self.cache.get_pending_tasks().await {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+
+        for task in tasks {
+            let should_cancel = match task.task_type.as_str() {
+                "UPLOAD_FILE" => {
+                    let payload: Result<UploadFilePayload, _> = serde_json::from_str(&task.payload);
+                    payload.map(|p| p.folder_id == Some(folder_id.to_string())).unwrap_or(false)
+                }
+                "UPLOAD_FOLDER" => {
+                    let payload: Result<UploadFolderPayload, _> = serde_json::from_str(&task.payload);
+                    payload.map(|p| p.target_parent_id == Some(folder_id.to_string())).unwrap_or(false)
+                }
+                _ => false,
+            };
+
+            if should_cancel {
+                self.cancel_task(&task.id).await;
+            }
+        }
     }
 }

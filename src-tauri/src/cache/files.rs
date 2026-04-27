@@ -7,6 +7,17 @@ impl MetadataCache {
     pub async fn save_file(&self, file: FileManifest) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         
+        // Check if the target folder exists before inserting to avoid FK violation
+        if let Some(ref fid) = file.folder_id {
+            let folder_exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM folders WHERE id = ?")
+                .bind(fid)
+                .fetch_one(&self.pool).await?;
+            if folder_exists.0 == 0 {
+                log::warn!("MIRROR [SAVE_FILE_SKIP]: Target folder {} no longer exists. Skipping save.", fid);
+                return Ok(());
+            }
+        }
+
         sqlx::query("INSERT INTO files (id, name, size, chunk_size, folder_id, account_id, storage_hub_id, storage_hub_access_hash, is_external, is_starred, created_at, is_current_version, version_of, version_number, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&file.id)
             .bind(&file.name)

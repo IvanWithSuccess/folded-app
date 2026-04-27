@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crate::session_manager::SessionManager;
 use crate::cluster::{ClusterOrchestrator, FileManifest};
 use crate::cache::{MetadataCache, FolderInfo, PendingTask};
+use crate::cluster::task_manager::TaskManager;
 
 #[tauri::command]
 pub async fn cluster_upload_file(
@@ -92,6 +93,7 @@ pub async fn delete_folder(
     session_state: State<'_, Arc<SessionManager>>,
     cluster_state: State<'_, Arc<ClusterOrchestrator>>,
     cache_state: State<'_, Arc<MetadataCache>>,
+    task_manager: State<'_, Arc<TaskManager>>,
     folder_id: String,
 ) -> Result<(), String> {
     let files_to_delete = {
@@ -107,6 +109,9 @@ pub async fn delete_folder(
         }
         all_files
     };
+
+    // Cancel any active upload tasks for this folder
+    task_manager.cancel_tasks_by_folder(&folder_id).await;
 
     // Delete from cache immediately so the UI responds instantly
     cache_state.delete_folder_recursive(&folder_id).await.map_err(|e| e.to_string())?;

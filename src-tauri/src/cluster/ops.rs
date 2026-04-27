@@ -250,7 +250,8 @@ impl ClusterOrchestrator {
                 let mut download_iter = match media {
                     Media::Document(d) => client.iter_download(&d),
                     Media::Sticker(s) => client.iter_download(&s.document),
-                    _ => return Err(anyhow!("Message {} media is not a downloadable document", message_id)),
+                    Media::Photo(p) => client.iter_download(&p),
+                    _ => return Err(anyhow!("Message {} media is not a downloadable document/photo", message_id)),
                 };
                 let mut chunk_data: Vec<u8> = Vec::new();
                 while let Some(data) = download_iter

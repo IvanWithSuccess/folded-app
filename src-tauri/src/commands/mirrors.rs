@@ -19,8 +19,31 @@ pub async fn add_mirror_rule(
     local_path: String,
     keep_history: bool,
 ) -> Result<(), String> {
-    let folder_name = std::path::Path::new(&local_path)
-        .file_name()
+    // 1. Validation: Path must exist and be a directory
+    let path = std::path::Path::new(&local_path);
+    if !path.exists() {
+        return Err("Local path does not exist".to_string());
+    }
+    if !path.is_dir() {
+        return Err("Local path is not a directory".to_string());
+    }
+
+    // 2. Validation: Prevent duplicate or nested mirrors
+    let existing_rules = cache_state.get_mirror_rules().await.map_err(|e| e.to_string())?;
+    for rule in existing_rules {
+        let existing_path = std::path::Path::new(&rule.local_path);
+        if path == existing_path {
+            return Err("This folder is already being mirrored".to_string());
+        }
+        if path.starts_with(existing_path) || existing_path.starts_with(path) {
+            return Err("Mirroring nested folders is not allowed to prevent conflicts".to_string());
+        }
+    }
+
+    // 3. Ensure "Mirrors" root exists in DB
+    let _ = cache_state.create_folder("Mirrors".to_string(), None, None).await;
+
+    let folder_name = path.file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
@@ -28,7 +51,7 @@ pub async fn add_mirror_rule(
     let rule = MirrorRule {
         id: Uuid::new_v4().to_string(),
         account_id,
-        local_path,
+        local_path: local_path.clone(),
         remote_folder_name: format!("Mirrors/{}", folder_name),
         remote_folder_id: None,
         keep_history,

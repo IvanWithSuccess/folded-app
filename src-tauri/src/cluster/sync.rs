@@ -194,7 +194,9 @@ impl ClusterOrchestrator {
 
             self.process_message_for_index(account_id, &msg, &cache).await?;
             discovered_count += 1;
-            if discovered_count >= 50 { break; }
+            
+            let batch_limit = if forward_id == 0 { 500 } else { 50 };
+            if discovered_count >= batch_limit { break; }
         }
         
         if max_new_id > forward_id {
@@ -220,7 +222,11 @@ impl ClusterOrchestrator {
             
             self.process_message_for_index(account_id, &msg, &cache).await?;
             audit_count += 1;
-            if audit_count >= 50 { break; }
+            
+            // For the initial crawl (backward_id == 0), we use a larger batch size
+            // to index historical data faster.
+            let batch_limit = if backward_id == 0 { 500 } else { 50 };
+            if audit_count >= batch_limit { break; }
         }
 
         for db_id in linked_ids {
@@ -260,37 +266,104 @@ impl ClusterOrchestrator {
         let mut attachment_ids: Vec<String> = Vec::new();
 
         if let Some(media) = msg.media() {
-            if let Media::Document(doc) = media {
-                let file_name = doc.name().unwrap_or("Untitled File").to_string();
-                if !file_name.starts_with("chunk_") && !file_name.ends_with(".dat") && !is_manifest {
-                    let file_id = format!("ext_{}_{}", account_id, msg.id());
-                    attachment_ids.push(file_id.clone());
-                    let manifest = FileManifest {
-                        id: file_id.clone(),
-                        name: file_name,
-                        total_size: doc.size().unwrap_or(0) as u64,
-                        chunk_size: doc.size().unwrap_or(0) as u64,
-                        chunks: vec![ChunkMeta {
-                                        chunk_id: format!("ext_{}_{}", account_id, msg.id()),
-                                        account_id: account_id.to_string(),
-                                        part_index: 0,
-                                        message_id: msg.id() as i64,
-                                        size_bytes: doc.size().unwrap_or(0) as u64,
-                                    }],
-                        folder_id: None,
-                        account_id: Some(account_id.to_string()),
-                        storage_hub_id: None,
-                        storage_hub_access_hash: None,
-                        is_external: true,
-                        is_starred: false,
-                        created_at: msg.date().timestamp(),
-                        is_current_version: true,
-                        version_of: None,
-                        version_number: 1,
-                        deleted_at: None,
-                    };
-                    let _ = cache.save_file(manifest).await;
+            match media {
+                Media::Document(doc) => {
+                    let mut file_name = doc.name().unwrap_or("").to_string();
+                    let mime = doc.mime_type().unwrap_or("");
+                    
+                    if file_name.is_empty() {
+                        let extension = match mime {
+                            "video/mp4" => "mp4",
+                            "video/quicktime" => "mov",
+                            "audio/mpeg" => "mp3",
+                            "audio/ogg" => "ogg",
+                            "application/pdf" => "pdf",
+                            _ => {
+                                if mime.starts_with("video/") { "mp4" }
+                                else if mime.starts_with("audio/") { "mp3" }
+                                else if mime.starts_with("image/") { "jpg" }
+                                else { "dat" }
+                            }
+                        };
+                        
+                        let prefix = if mime.starts_with("video/") { "Video" }
+                                    else if mime.starts_with("audio/") { "Audio" }
+                                    else { "File" };
+                                    
+                        file_name = format!("{}_{}.{}", prefix, msg.id(), extension);
+                    }
+
+                    if !file_name.starts_with("chunk_") && !file_name.ends_with(".dat") && !is_manifest {
+                        let file_id = format!("ext_{}_{}", account_id, msg.id());
+                        attachment_ids.push(file_id.clone());
+                        let manifest = FileManifest {
+                            id: file_id.clone(),
+                            name: file_name,
+                            total_size: doc.size().unwrap_or(0) as u64,
+                            chunk_size: doc.size().unwrap_or(0) as u64,
+                            chunks: vec![ChunkMeta {
+                                            chunk_id: format!("ext_{}_{}", account_id, msg.id()),
+                                            account_id: account_id.to_string(),
+                                            part_index: 0,
+                                            message_id: msg.id() as i64,
+                                            size_bytes: doc.size().unwrap_or(0) as u64,
+                                        }],
+                            folder_id: None,
+                            account_id: Some(account_id.to_string()),
+                            storage_hub_id: None,
+                            storage_hub_access_hash: None,
+                            is_external: true,
+                            is_starred: false,
+                            created_at: msg.date().timestamp(),
+                            is_current_version: true,
+                            version_of: None,
+                            version_number: 1,
+                            deleted_at: None,
+                        };
+                        let _ = cache.save_file(manifest).await;
+                    }
                 }
+                Media::Photo(photo) => {
+                    if !is_manifest {
+                        let file_id = format!("ext_photo_{}_{}", account_id, msg.id());
+                        attachment_ids.push(file_id.clone());
+                        
+                        // Get the largest size for the photo
+                        let photo_size = photo.thumbs().iter()
+                            .filter_map(|t| match t {
+                                grammers_client::media::PhotoSize::Size(s) => Some(s.size as u64),
+                                _ => None
+                            })
+                            .max().unwrap_or(0);
+
+                        let manifest = FileManifest {
+                            id: file_id.clone(),
+                            name: format!("Photo_{}_{}.jpg", msg.id(), photo.id()),
+                            total_size: photo_size,
+                            chunk_size: photo_size,
+                            chunks: vec![ChunkMeta {
+                                            chunk_id: file_id.clone(),
+                                            account_id: account_id.to_string(),
+                                            part_index: 0,
+                                            message_id: msg.id() as i64,
+                                            size_bytes: photo_size,
+                                        }],
+                            folder_id: None,
+                            account_id: Some(account_id.to_string()),
+                            storage_hub_id: None,
+                            storage_hub_access_hash: None,
+                            is_external: true,
+                            is_starred: false,
+                            created_at: msg.date().timestamp(),
+                            is_current_version: true,
+                            version_of: None,
+                            version_number: 1,
+                            deleted_at: None,
+                        };
+                        let _ = cache.save_file(manifest).await;
+                    }
+                }
+                _ => {}
             }
         }
 

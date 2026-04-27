@@ -51,11 +51,16 @@ impl ClusterOrchestrator {
         let client = session_manager.get_client_by_id(account_id).await
             .ok_or_else(|| anyhow!("Account not connected"))?;
 
-        client.invoke(&tl::functions::messages::DeleteMessages {
+        // Try to delete from Telegram, but don't fail if it's already gone
+        let _ = client.invoke(&tl::functions::messages::DeleteMessages {
             id: vec![message_id],
             revoke: true,
-        }).await?;
+        }).await.map_err(|e| {
+            log::warn!("Failed to delete note {} from Telegram (might be already gone): {}", message_id, e);
+            e
+        });
 
+        // Always delete from local DB
         sqlx::query("DELETE FROM notes WHERE id = ?")
             .bind(note_id)
             .execute(cache.get_pool()).await?;

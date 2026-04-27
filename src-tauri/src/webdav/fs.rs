@@ -253,8 +253,24 @@ impl DavFileSystem for ClusterFs {
         async move {
             let entry = self.resolve_path(path).await?;
             if let VirtualEntry::Folder(folder) = entry {
+                // PROTECTION: Block deletion of system folders and mirror targets/ancestors
+                let rules = self.cache.get_mirror_rules().await.map_err(|_| FsError::GeneralFailure)?;
+                
+                // Get virtual path for this folder
+                let url_str = path.as_url_string();
+                let decoded_path = urlencoding::decode(&url_str).map(|s| s.into_owned()).unwrap_or(url_str);
+                let virtual_path = decoded_path.trim_start_matches("/FoldedCloud/").trim_matches('/');
+
+                for rule in rules {
+                    let rpath = rule.remote_folder_name.trim_matches('/');
+                    // Block if deleting the folder itself or an ancestor of a mirror
+                    if virtual_path == "Mirrors" || rpath == virtual_path || rpath.starts_with(&format!("{}/", virtual_path)) {
+                        log::warn!("WebDAV: Blocked attempt to delete protected folder: {}", virtual_path);
+                        return Err(FsError::Forbidden);
+                    }
+                }
+
                 // 1. Get all file manifests that need to be deleted from Telegram
-                // delete_folder_recursive returns file IDs
                 let file_ids = self.cache.delete_folder_recursive(&folder.id)
                     .await.map_err(|_| FsError::GeneralFailure)?;
                 

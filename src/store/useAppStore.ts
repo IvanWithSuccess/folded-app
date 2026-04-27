@@ -39,6 +39,7 @@ interface AppStore {
   setQueueTasks: (tasks: PersistentTask[]) => void;
   updateQueueTask: (taskId: string, status: string, error?: string) => void;
   activeMirrors: Record<string, string>;
+  logoutAccount: (id: string) => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -99,4 +100,12 @@ export const useAppStore = create<AppStore>((set) => ({
       t.id === taskId ? { ...t, status: status as any, error, updated_at: Date.now() } : t
     )
   })),
+  logoutAccount: (id) => set((state) => {
+    const nextAccounts = state.accounts.filter(a => a.id !== id);
+    const wasActive = state.activeAccountId === id;
+    return {
+      accounts: nextAccounts,
+      activeAccountId: wasActive ? (nextAccounts[0]?.id || null) : state.activeAccountId,
+    };
+  }),
 }));

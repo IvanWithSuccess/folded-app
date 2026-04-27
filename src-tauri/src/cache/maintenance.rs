@@ -4,13 +4,28 @@ use super::MetadataCache;
 
 impl MetadataCache {
     pub async fn purge_all_metadata(&self) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM chunks").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM files").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM folders").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM notes").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM account_sync_state").execute(&mut *tx).await?;
-        tx.commit().await?;
+        let mut conn = self.pool.acquire().await?;
+
+        // Disable FKs temporarily for the bulk delete
+        sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *conn).await?;
+        
+        sqlx::query("DELETE FROM chunks").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM files").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM folders").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM notes").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM activity_log").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM folder_history").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM account_sync_state").execute(&mut *conn).await?;
+        
+        // Reset mirror rules so they can be re-initialized
+        sqlx::query("UPDATE mirror_rules SET remote_folder_id = NULL").execute(&mut *conn).await?;
+        
+        // Re-enable FKs
+        sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await?;
+        
+        // Re-create basic structure
+        let _ = self.create_folder("Mirrors".to_string(), None, None).await;
+        
         Ok(())
     }
 
@@ -44,7 +59,19 @@ impl MetadataCache {
             .bind(account_id)
             .execute(&mut *tx).await?;
             
-        // Orphaned files cleanup
+        sqlx::query("DELETE FROM files WHERE account_id = ?")
+            .bind(account_id)
+            .execute(&mut *tx).await?;
+            
+        sqlx::query("DELETE FROM folders WHERE account_id = ?")
+            .bind(account_id)
+            .execute(&mut *tx).await?;
+            
+        sqlx::query("DELETE FROM account_sync_state WHERE account_id = ?")
+            .bind(account_id)
+            .execute(&mut *tx).await?;
+
+        // Orphaned files cleanup (files that lost all chunks)
         sqlx::query("DELETE FROM files WHERE id NOT IN (SELECT DISTINCT file_id FROM chunks)")
             .execute(&mut *tx).await?;
             
@@ -97,7 +124,7 @@ impl MetadataCache {
 
     pub async fn get_cache_stats(&self) -> Result<(u64, u64)> {
         let row: (i64, i64) = sqlx::query_as(
-            "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM file_cache"
+            "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM files WHERE deleted_at IS NULL"
         ).fetch_one(&self.pool).await?;
         Ok((row.0 as u64, row.1 as u64))
     }
