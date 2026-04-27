@@ -339,7 +339,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
           explorer.setPath(newPath);
           explorer.refreshCurrentView(newPath);
         }}
-        onCreateFolder={() => { setTargetItem(null); setActiveModal('newFolder'); }}
+        onCreateFolder={() => { setTargetItems([]); setActiveModal('newFolder'); }}
         onUploadFile={() => handleUploadFileInColumn(undefined, false)}
         onUploadFolder={() => handleUploadFileInColumn(undefined, true)}
         category={category}

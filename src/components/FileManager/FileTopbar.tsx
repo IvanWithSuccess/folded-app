@@ -57,7 +57,7 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
   }, [path]);
 
   const breadcrumbs = category 
-    ? [{ id: 'category', label: category === 'PHOTOS' ? 'Media Lab' : category === 'DOCUMENTS' ? 'Documents' : 'Starred', icon: <Star size={12} className="text-blue-500" /> }]
+    ? [{ id: 'category', label: category === 'PHOTOS' ? 'Media Lab' : category === 'DOCUMENTS' ? 'Documents' : 'Starred', icon: <Star size={12} className="text-blue-500" />, isRoot: false, idx: -1 }]
     : path.map((folderId, idx) => ({
         id: folderId || 'root',
         label: getBreadcrumbLabel(folderId, idx),

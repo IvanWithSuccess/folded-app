@@ -40,6 +40,7 @@ interface AppStore {
   updateQueueTask: (taskId: string, status: string, error?: string) => void;
   activeMirrors: Record<string, string>;
   logoutAccount: (id: string) => void;
+  clearNavigation: () => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({

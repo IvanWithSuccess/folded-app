@@ -134,7 +134,7 @@ export const MirrorsView: React.FC = () => {
       
       // Handle "A/B/C" paths by taking the first part
       const baseName = rule.remote_folder_name.split('/')[0];
-      const target = folders.find(f => f.name === baseName);
+      const target = folders.find((f: any) => f.name === baseName);
       
       if (target) {
         navigateToPath(rule.account_id, [null, target.id]);

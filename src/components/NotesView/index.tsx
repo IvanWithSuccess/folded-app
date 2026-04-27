@@ -78,12 +78,13 @@ export const NotesView: React.FC = () => {
         {selectedNote || isCreating ? (
           <NoteEditor 
             note={selectedNote}
+            isCreating={isCreating}
             onClose={() => { setSelectedNote(null); setIsCreating(false); }}
             onSave={(id, content) => selectedNote ? handleUpdateNote(selectedNote, content) : handleCreateNote(content)}
             onDelete={selectedNote ? () => handleDeleteNote(selectedNote) : () => {}}
             onUpdate={handleUpdateNote}
-            onAttach={(fileId) => selectedNote && handleAttach(selectedNote.id, fileId)}
-            onDetach={(fileId) => selectedNote && handleDetach(selectedNote.id, fileId)}
+            onAttach={async (fileId) => { if (selectedNote) await handleAttach(selectedNote.id, fileId); }}
+            onDetach={async (fileId) => { if (selectedNote) await handleDetach(selectedNote.id, fileId); }}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center opacity-20">
