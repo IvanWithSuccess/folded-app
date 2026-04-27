@@ -7,7 +7,6 @@ import {
 import { useAppStore } from '../../store/useAppStore';
 import { ViewCategory } from '../../types/file';
 
-import logoSvg from '../../assets/logo.svg';
 
 export const Sidebar: React.FC = () => {
   const { 
@@ -36,7 +35,6 @@ export const Sidebar: React.FC = () => {
     <div className="w-64 h-full flex flex-col border-r border-zinc-800 shrink-0 select-none" style={{ backgroundColor: '#09090b' }}>
       {/* App Header */}
       <div className="h-14 flex items-center px-4 border-b border-zinc-800 gap-3 bg-[#0a0a0c]">
-        <img src={logoSvg} alt="Folded Cloud" className="w-8 h-8 rounded-md shrink-0 shadow-[0_0_15px_rgba(59,130,246,0.15)]" />
         <div className="flex flex-col leading-tight">
           <span className="text-[12px] font-black text-white tracking-tight uppercase">Folded</span>
           <span className="text-[8px] font-black uppercase tracking-[0.3em] text-zinc-600">Storage Cluster</span>
