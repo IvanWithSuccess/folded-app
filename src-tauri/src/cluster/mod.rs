@@ -13,8 +13,12 @@ pub mod task_manager;
 // Re-export types for external usage
 pub use types::*;
 
+use std::collections::HashSet;
+use tokio::sync::Mutex as TokioMutex;
+
 pub struct ClusterOrchestrator {
     pub(crate) semaphore: Arc<Semaphore>,
+    pub(crate) active_ops: Arc<TokioMutex<HashSet<String>>>,
 }
 
 impl std::fmt::Debug for ClusterOrchestrator {
@@ -33,6 +37,7 @@ impl ClusterOrchestrator {
     pub fn new() -> Self {
         Self {
             semaphore: Arc::new(Semaphore::new(3)),
+            active_ops: Arc::new(TokioMutex::new(HashSet::new())),
         }
     }
 }

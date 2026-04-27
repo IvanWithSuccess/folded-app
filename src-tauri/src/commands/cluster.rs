@@ -2,6 +2,7 @@ use tauri::State;
 use std::sync::Arc;
 use crate::session_manager::SessionManager;
 use crate::cluster::{ClusterOrchestrator, ChannelInfo};
+use grammers_tl_types as tl;
 use crate::cache::MetadataCache;
 use crate::SyncTracker;
 
@@ -216,5 +217,111 @@ pub async fn cluster_delete_file(
     cluster_state.delete_file(manifest, session_arc).await.map_err(|e| e.to_string())?;
     cache_state.delete_file(&file_id).await.map_err(|e| e.to_string())?;
     
+    Ok(())
+}
+#[tauri::command]
+pub async fn format_storage(
+    app: tauri::AppHandle,
+    session_state: State<'_, Arc<SessionManager>>,
+    cluster_state: State<'_, Arc<ClusterOrchestrator>>,
+    account_id: String,
+    mode: String, // "ALL" or "APP_DATA"
+) -> Result<(), String> {
+    let client = session_state.get_client_by_id(&account_id).await
+        .ok_or_else(|| "Account not connected".to_string())?;
+
+    // Check if already formatting this account
+    {
+        let mut active = cluster_state.active_ops.lock().await;
+        if active.contains(&account_id) {
+            return Err("Formatting already in progress for this account".to_string());
+        }
+        active.insert(account_id.clone());
+    }
+
+    let cluster_clone = Arc::clone(&cluster_state);
+    // Spawn a background task for the long-running operation
+    tokio::spawn(async move {
+        let mut deleted_count = 0;
+        let mut messages = client.iter_messages(tl::enums::InputPeer::PeerSelf);
+        let mut to_delete = Vec::new();
+
+        use tauri::Emitter;
+        let _ = app.emit("format-status", format!("Scanning storage on {}...", account_id));
+
+        let mut process_next = true;
+        while process_next {
+            match messages.next().await {
+                Ok(Some(msg)) => {
+                    let should_delete = if mode == "ALL" {
+                        true
+                    } else {
+                        let mut is_folded = false;
+                        let text = msg.text();
+                        if text.contains("#folded_manifest") {
+                            is_folded = true;
+                        }
+                        if !is_folded {
+                            if let Some(media) = msg.media() {
+                                if let grammers_client::media::Media::Document(doc) = media {
+                                    if let Some(name) = doc.name() {
+                                        if name.starts_with("FOLDED-") || name == "manifest.json" {
+                                            is_folded = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        is_folded
+                    };
+
+                    if should_delete {
+                        to_delete.push(msg.id());
+                        deleted_count += 1;
+                        
+                        if to_delete.len() >= 50 { // Smaller batches for better feedback
+                            let batch = to_delete.split_off(0);
+                            let _ = app.emit("format-status", format!("Deleting batch... (Total: {})", deleted_count));
+                            if let Err(e) = client.invoke(&tl::functions::messages::DeleteMessages {
+                                id: batch,
+                                revoke: true,
+                            }).await {
+                                let _ = app.emit("format-error", e.to_string());
+                                return;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                    }
+                }
+                Ok(None) => {
+                    process_next = false;
+                }
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    log::error!("Format error during message iteration: {}", err_msg);
+                    let _ = app.emit("format-error", err_msg);
+                    return;
+                }
+            }
+        }
+
+        if !to_delete.is_empty() {
+            let _ = app.emit("format-status", format!("Finalizing... (Total: {})", deleted_count));
+            if let Err(e) = client.invoke(&tl::functions::messages::DeleteMessages {
+                id: to_delete,
+                revoke: true,
+            }).await {
+                let _ = app.emit("format-error", e.to_string());
+                return;
+            }
+        }
+        log::info!("FORMAT TASK: Completed successfully. Deleted {} messages.", deleted_count);
+        {
+            let mut active = cluster_clone.active_ops.lock().await;
+            active.remove(&account_id);
+        }
+        let _ = app.emit("format-finished", deleted_count);
+    });
+
     Ok(())
 }

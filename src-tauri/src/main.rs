@@ -41,6 +41,14 @@ impl SyncTracker {
             log::info!("Signal sent to stop crawler for account {}", account_id);
         }
     }
+
+    pub async fn stop_all(&self) {
+        let mut active = self.active_crawlers.lock().await;
+        for (account_id, token) in active.drain() {
+            token.cancel();
+            log::info!("Global Stop: Crawler for {} signaled to stop", account_id);
+        }
+    }
 }
 
 const API_ID: i32 = 26947469; 

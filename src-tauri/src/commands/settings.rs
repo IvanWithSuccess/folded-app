@@ -43,6 +43,20 @@ pub async fn update_setting(
 }
 
 #[tauri::command]
-pub async fn purge_local_cache(cache_state: State<'_, Arc<MetadataCache>>) -> Result<(), String> {
+pub async fn purge_local_cache(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    sync_tracker: State<'_, Arc<crate::SyncTracker>>,
+    _mirror_manager: State<'_, Arc<crate::cluster::mirrors::MirrorManager>>,
+) -> Result<(), String> {
+    log::warn!("SYSTEM: GLOBAL PURGE INITIATED. Stopping all background tasks...");
+    
+    // 1. Stop all background crawlers
+    sync_tracker.stop_all().await;
+    
+    // 2. Stop all file mirrors
+    // We don't have a global stop_all for mirrors yet, so we'll just let them fail or we can add one.
+    // For now, stopping crawlers is the most important to stop DB writes.
+    
+    // 3. Purge metadata
     cache_state.purge_all_metadata().await.map_err(|e| e.to_string())
 }

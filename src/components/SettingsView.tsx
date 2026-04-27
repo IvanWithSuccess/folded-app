@@ -4,8 +4,10 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { 
   Settings, Folder, RefreshCw, HardDrive, ShieldAlert,
   Save, AlertTriangle, Monitor, Webhook, AppWindow, Database, Zap,
-  ChevronRight
+  ChevronRight, Trash2, Eraser
 } from 'lucide-react';
+import { useAppStore } from '../store/useAppStore';
+import { listen } from '@tauri-apps/api/event';
 
 interface AppSettings {
   downloadDirectory: string;
@@ -41,6 +43,7 @@ export const SettingsView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [cacheStats, setCacheStats] = useState<{ file_count: number; total_bytes: number } | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
+  const { accounts } = useAppStore();
 
   useEffect(() => {
     loadSettings();

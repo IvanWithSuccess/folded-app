@@ -54,6 +54,7 @@ macro_rules! generate_handler {
             $crate::commands::cluster::get_user_channels,
             $crate::commands::cluster::create_storage_hub,
             $crate::commands::cluster::cluster_delete_file,
+            $crate::commands::cluster::format_storage,
             
             $crate::commands::system::open_system_file,
             $crate::commands::system::read_preview_file,
