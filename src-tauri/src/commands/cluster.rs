@@ -22,7 +22,7 @@ pub async fn cluster_download_file(
 
     let dest = std::path::PathBuf::from(&dest_path);
     match cluster_state
-        .download_file(manifest, dest, Arc::clone(&session_state), Some(app))
+        .download_file(manifest, dest, Arc::clone(&session_state), Some(app), None)
         .await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -53,7 +53,7 @@ pub async fn cluster_download_to_tmp(
     let dest = tmp_dir.join(&manifest.name);
 
     match cluster_state
-        .download_file(manifest.clone(), dest.clone(), Arc::clone(&session_state), Some(app))
+        .download_file(manifest.clone(), dest.clone(), Arc::clone(&session_state), Some(app), None)
         .await {
             Ok(_) => {
                 let _ = cache_state.record_cached_file(&manifest.id, &dest.to_string_lossy(), manifest.total_size).await;

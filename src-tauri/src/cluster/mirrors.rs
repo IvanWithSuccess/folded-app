@@ -1,3 +1,4 @@
+use tokio_util::sync::CancellationToken;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -17,6 +18,7 @@ pub struct MirrorManager {
     watchers: Arc<TokioMutex<HashMap<String, notify::RecommendedWatcher>>>,
     debounce_map: Arc<TokioMutex<HashMap<PathBuf, Instant>>>,
     statuses: Arc<TokioMutex<HashMap<String, String>>>,
+    cancellation_tokens: Arc<TokioMutex<HashMap<String, CancellationToken>>>,
 }
 
 impl MirrorManager {
@@ -34,6 +36,7 @@ impl MirrorManager {
             watchers: Arc::new(TokioMutex::new(HashMap::new())),
             debounce_map: Arc::new(TokioMutex::new(HashMap::new())),
             statuses: Arc::new(TokioMutex::new(HashMap::new())),
+            cancellation_tokens: Arc::new(TokioMutex::new(HashMap::new())),
         }
     }
 
@@ -61,6 +64,7 @@ impl MirrorManager {
             watchers: Arc::clone(&self.watchers),
             debounce_map: Arc::clone(&self.debounce_map),
             statuses: Arc::clone(&self.statuses),
+            cancellation_tokens: Arc::clone(&self.cancellation_tokens),
         }
     }
 
@@ -80,6 +84,10 @@ impl MirrorManager {
         if watchers.contains_key(&rule.id) {
             return Ok(());
         }
+        
+        let token = CancellationToken::new();
+        let mut tokens = self.cancellation_tokens.lock().await;
+        tokens.insert(rule.id.clone(), token.clone());
 
         log::info!("MIRROR [INIT]: {} -> {}", rule.local_path, rule.remote_folder_name);
         
@@ -124,20 +132,34 @@ impl MirrorManager {
         let manager_clone = self.clone_self();
 
         let initial_sync_id = rule_id.clone();
+        let initial_token = token.clone();
         tokio::spawn(async move {
-            manager_clone.update_status(&initial_sync_id, "INDEXING").await;
-            log::info!("MIRROR [SYNC]: Scanning {} for existing data...", initial_path.display());
-            if let Err(e) = perform_initial_sync(
-                &initial_path,
-                &initial_remote,
-                &initial_account,
-                initial_cache,
-                initial_orch,
-                initial_session
-            ).await {
-                log::error!("MIRROR [SYNC_ERR]: {}", e);
+            loop {
+                if initial_token.is_cancelled() { break; }
+                
+                manager_clone.update_status(&initial_sync_id, "INDEXING").await;
+                log::info!("MIRROR [RECONCILE]: Scanning {}...", initial_path.display());
+                
+                if let Err(e) = perform_initial_sync(
+                    &initial_path,
+                    &initial_remote,
+                    &initial_account,
+                    Arc::clone(&initial_cache),
+                    Arc::clone(&initial_orch),
+                    Arc::clone(&initial_session),
+                    initial_token.clone(),
+                ).await {
+                    log::error!("MIRROR [RECONCILE_ERR]: {}", e);
+                }
+                
+                manager_clone.update_status(&initial_sync_id, "IDLE").await;
+                
+                // Wait 5 minutes before next full reconciliation scan
+                tokio::select! {
+                    _ = initial_token.cancelled() => break,
+                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(300)) => {}
+                }
             }
-            manager_clone.update_status(&initial_sync_id, "IDLE").await;
         });
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
@@ -152,81 +174,92 @@ impl MirrorManager {
 
         let debounce_map = Arc::clone(&self.debounce_map);
         let manager_clone = self.clone_self();
+        let loop_token = token.clone();
         
         tokio::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                match event.kind {
-                    EventKind::Modify(_) | EventKind::Create(_) => {
-                        for path in event.paths {
-                            if path.is_file() {
-                                // Debounce logic
-                                {
-                                    let mut map = debounce_map.lock().await;
-                                    let now = Instant::now();
-                                    if let Some(last) = map.get(&path) {
-                                        if now.duration_since(*last) < Duration::from_secs(3) {
-                                            continue;
+            loop {
+                tokio::select! {
+                    _ = loop_token.cancelled() => {
+                         log::info!("MIRROR [CANCEL]: Task for {} received cancellation", rule_id);
+                         break;
+                    }
+                    Some(event) = rx.recv() => {
+                        match event.kind {
+                            EventKind::Modify(_) | EventKind::Create(_) => {
+                                for path in event.paths {
+                                    if path.is_file() {
+                                        // Debounce logic
+                                        {
+                                            let mut map = debounce_map.lock().await;
+                                            let now = Instant::now();
+                                            if let Some(last) = map.get(&path) {
+                                                if now.duration_since(*last) < Duration::from_secs(3) {
+                                                    continue;
+                                                }
+                                            }
+                                            map.insert(path.clone(), now);
                                         }
+        
+                                        log::info!("MIRROR [EVENT]: File activity detected: {:?}", path.file_name().unwrap_or_default());
+                                        
+                                        let rel_path = match path.strip_prefix(&local_path_root) {
+                                            Ok(p) => p,
+                                            Err(_) => continue,
+                                        };
+        
+                                         if let Err(e) = sync_file_to_remote(
+                                            &path,
+                                            rel_path,
+                                            &remote_folder_name,
+                                            &account_id,
+                                            rule.keep_history,
+                                            Arc::clone(&cache),
+                                            Arc::clone(&orchestrator),
+                                            Arc::clone(&session_manager),
+                                            loop_token.clone(),
+                                        ).await {
+                                            log::error!("MIRROR [UPLOAD_ERR]: {}", e);
+                                        }
+                                        manager_clone.update_status(&rule_id, "IDLE").await;
                                     }
-                                    map.insert(path.clone(), now);
                                 }
-
-                                log::info!("MIRROR [EVENT]: File activity detected: {:?}", path.file_name().unwrap_or_default());
-                                
-                                let rel_path = match path.strip_prefix(&local_path_root) {
-                                    Ok(p) => p,
-                                    Err(_) => continue,
-                                };
-
-                                 if let Err(e) = sync_file_to_remote(
-                                    &path,
-                                    rel_path,
-                                    &remote_folder_name,
-                                    &account_id,
-                                    rule.keep_history,
-                                    Arc::clone(&cache),
-                                    Arc::clone(&orchestrator),
-                                    Arc::clone(&session_manager)
-                                ).await {
-                                    log::error!("MIRROR [UPLOAD_ERR]: {}", e);
-                                }
-                                manager_clone.update_status(&rule_id, "IDLE").await;
                             }
+                            EventKind::Remove(_) => {
+                                for path in event.paths {
+                                    if path == local_path_root {
+                                        log::warn!("MIRROR [ERROR]: Root folder deleted: {:?}", path);
+                                        manager_clone.update_status(&rule_id, "ERROR").await;
+                                        loop_token.cancel(); // Cancel this specific mirror task
+                                        return; 
+                                    }
+                                    // Soft-delete individual files removed from the mirrored folder
+                                    if path.is_file() || !path.exists() {
+                                        let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                                        log::info!("MIRROR [REMOVE]: File removed from local mirror: {}", file_name);
+                                        
+                                        let cache_c = Arc::clone(&cache);
+                                        let file_name_c = file_name.clone();
+                                        let account_id_c = account_id.clone();
+                                        let remote_folder_name_c = remote_folder_name.clone();
+                                        let keep_history = rule.keep_history;
+                                        
+                                        tokio::spawn(async move {
+                                            if let Err(e) = handle_mirror_file_removed(
+                                                &file_name_c,
+                                                &remote_folder_name_c,
+                                                &account_id_c,
+                                                keep_history,
+                                                cache_c,
+                                            ).await {
+                                                log::error!("MIRROR [REMOVE_ERR]: {}", e);
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    EventKind::Remove(_) => {
-                        for path in event.paths {
-                            if path == local_path_root {
-                                log::warn!("MIRROR [ERROR]: Root folder deleted: {:?}", path);
-                                manager_clone.update_status(&rule_id, "ERROR").await;
-                                return; // Stop the worker
-                            }
-                            // Soft-delete individual files removed from the mirrored folder
-                            if path.is_file() || !path.exists() {
-                                let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                                log::info!("MIRROR [REMOVE]: File removed from local mirror: {}", file_name);
-                                
-                                let cache_c = Arc::clone(&cache);
-                                let file_name_c = file_name.clone();
-                                let account_id_c = account_id.clone();
-                                let remote_folder_name_c = remote_folder_name.clone();
-                                let keep_history = rule.keep_history;
-                                
-                                tokio::spawn(async move {
-                                    if let Err(e) = handle_mirror_file_removed(
-                                        &file_name_c,
-                                        &remote_folder_name_c,
-                                        &account_id_c,
-                                        keep_history,
-                                        cache_c,
-                                    ).await {
-                                        log::error!("MIRROR [REMOVE_ERR]: {}", e);
-                                    }
-                                });
-                            }
-                        }
-                    }
-                    _ => {}
                 }
             }
             log::info!("MIRROR [STOP]: Watcher {} terminated", rule_id);
@@ -240,6 +273,12 @@ impl MirrorManager {
         if let Some(watcher) = watchers.remove(id) {
             drop(watcher);
         }
+        
+        let mut tokens = self.cancellation_tokens.lock().await;
+        if let Some(token) = tokens.remove(id) {
+            token.cancel();
+        }
+        
         Ok(())
     }
 }
@@ -291,17 +330,29 @@ async fn perform_initial_sync(
     cache: Arc<MetadataCache>,
     orchestrator: Arc<ClusterOrchestrator>,
     session_manager: Arc<SessionManager>,
+    token: CancellationToken,
 ) -> Result<String> {
     let mut root_id = String::new();
     use walkdir::WalkDir;
 
     for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        if token.is_cancelled() {
+            return Err(anyhow::anyhow!("Initial sync cancelled"));
+        }
+        
         if entry.file_type().is_file() {
             let path = entry.path().to_path_buf();
-            let rel_path = path.strip_prefix(root)?;
+            let rel_path = match path.strip_prefix(root) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
             
             let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            let size = tokio::fs::metadata(&path).await?.len();
+            let metadata = match tokio::fs::metadata(&path).await {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let size = metadata.len();
             
             let existing = cache.get_files_in(None, Some(account_id.to_string())).await?;
             if existing.iter().any(|f| f.name == name && f.total_size == size) {
@@ -309,7 +360,7 @@ async fn perform_initial_sync(
             }
 
             log::info!("MIRROR [SYNC]: Ingesting backlog file: {:?}", name);
-            let r_id = sync_file_to_remote(
+            match sync_file_to_remote(
                 &path,
                 rel_path,
                 remote_base,
@@ -317,9 +368,15 @@ async fn perform_initial_sync(
                 true, // keep_history for initial sync
                 Arc::clone(&cache),
                 Arc::clone(&orchestrator),
-                Arc::clone(&session_manager)
-            ).await?;
-            root_id = r_id;
+                Arc::clone(&session_manager),
+                token.clone(),
+            ).await {
+                Ok(id) => { root_id = id; },
+                Err(e) => {
+                    log::error!("MIRROR [SYNC_FILE_ERR] {}: {}", name, e);
+                    // We continue to other files even if one fails (internet might be back soon)
+                }
+            }
         }
     }
     Ok(root_id)
@@ -334,7 +391,11 @@ async fn sync_file_to_remote(
     cache: Arc<MetadataCache>,
     orchestrator: Arc<ClusterOrchestrator>,
     session_manager: Arc<SessionManager>,
+    token: CancellationToken,
 ) -> Result<String> {
+    if token.is_cancelled() {
+        return Err(anyhow::anyhow!("Sync cancelled"));
+    }
     let file_name = full_path.file_name().unwrap_or_default().to_string_lossy().to_string();
     
     // Resolve folder ID for the file
@@ -385,7 +446,8 @@ async fn sync_file_to_remote(
         None,
         current_parent_id.clone(),
         account_id.to_string(),
-        None
+        None,
+        Some(token),
     ).await?;
 
     let folder_id = current_parent_id.clone().unwrap_or_default();

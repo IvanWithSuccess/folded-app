@@ -36,6 +36,7 @@ http_body_04 = { version = "0.4", package = "http-body" }
 zip = "2.1.0"
 tokio-stream = { version = "0.1.18", features = ["fs"] }
 notify = "6.1.1"
+tokio-util = "0.7.18"
 
 [build-dependencies]
 tauri-build = { version = "2.1.1", features = [] }

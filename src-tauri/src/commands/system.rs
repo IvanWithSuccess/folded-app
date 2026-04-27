@@ -161,7 +161,7 @@ pub async fn share_file(
             std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
         }
         let download_path = tmp_dir.join(format!("{}_{}", file_id, manifest.name));
-        cluster_state.download_file(manifest.clone(), download_path.clone(), Arc::clone(&session_state), None)
+        cluster_state.download_file(manifest.clone(), download_path.clone(), Arc::clone(&session_state), None, None)
             .await.map_err(|e| format!("Download failed: {}", e))?;
         download_path
     };
@@ -275,7 +275,7 @@ pub async fn download_items_to_path(
             let manifest = cache_state.get_file_by_id(&id).await.map_err(|e| e.to_string())?
                 .ok_or_else(|| format!("File {} not found", id))?;
             let dest = std::path::Path::new(&target_path).join(&manifest.name);
-            cluster_state.download_file(manifest, dest, Arc::clone(&session_state), None).await.map_err(|e| e.to_string())?;
+            cluster_state.download_file(manifest, dest, Arc::clone(&session_state), None, None).await.map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -293,7 +293,7 @@ async fn download_folder_recursive(
     let files = cache_state.get_files_in(Some(folder_id.to_string()), None).await.map_err(|e| e.to_string())?;
     for f in files {
         let file_dest = dest_path.join(&f.name);
-        cluster_state.download_file(f, file_dest, Arc::clone(session_state), None).await.map_err(|e| e.to_string())?;
+        cluster_state.download_file(f, file_dest, Arc::clone(session_state), None, None).await.map_err(|e| e.to_string())?;
     }
 
     let subfolders = cache_state.get_folders_in(Some(folder_id.to_string()), None).await.map_err(|e| e.to_string())?;

@@ -42,6 +42,7 @@ pub async fn restore_file_version(
         tmp_path.clone(),
         Arc::clone(&session_state),
         None,
+        None,
     ).await.map_err(|e| e.to_string())?;
 
     // 4. Upload it as a new version
@@ -53,6 +54,7 @@ pub async fn restore_file_version(
         None,
         version.folder_id.clone(),
         version.account_id.clone().unwrap_or_default(),
+        None,
         None,
     ).await.map_err(|e| e.to_string())?;
 
@@ -118,6 +120,7 @@ pub async fn download_file_version(
         dest_path.clone(),
         Arc::clone(&session_state),
         None,
+        None,
     ).await.map_err(|e| e.to_string())?;
 
     Ok(dest_path.to_string_lossy().to_string())
@@ -154,6 +157,7 @@ pub async fn restore_deleted_item(
         file.clone(),
         tmp_path.clone(),
         Arc::clone(&session_state),
+        None,
         None,
     ).await.map_err(|e| e.to_string())?;
 

@@ -122,7 +122,8 @@ impl TaskManager {
             None,
             payload.folder_id.clone(),
             payload.account_id.clone(),
-            Some(task.id.clone())
+            Some(task.id.clone()),
+            None
         ).await?;
 
         self.cache.save_file(manifest.clone()).await?;
@@ -183,6 +184,7 @@ impl TaskManager {
                     None, 
                     Some(remote_parent_id), 
                     payload.account_id.clone(),
+                    None,
                     None
                 ).await?;
                 

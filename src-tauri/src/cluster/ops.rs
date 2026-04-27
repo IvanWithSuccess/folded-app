@@ -1,3 +1,4 @@
+use tokio_util::sync::CancellationToken;
 use std::path::PathBuf;
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
@@ -19,7 +20,13 @@ impl ClusterOrchestrator {
         folder_id: Option<String>,
         account_id: String,
         external_upload_id: Option<String>,
+        token: Option<CancellationToken>,
     ) -> Result<FileManifest> {
+        if let Some(ref t) = token {
+            if t.is_cancelled() {
+                return Err(anyhow!("Upload cancelled"));
+            }
+        }
         let account_ids = vec![account_id.clone()];
         
         let chunk_str = cache.get_setting("chunk_size_gb").await.ok().flatten().unwrap_or_else(|| "1.9".to_string());
@@ -45,6 +52,7 @@ impl ClusterOrchestrator {
             let upload_id = upload_id.clone();
             let file_name = file_name.clone();
             let total_uploaded = Arc::clone(&total_uploaded);
+            let token = token.clone();
 
             let task = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.map_err(|e| anyhow!("Semaphore Error: {}", e))?;
@@ -62,6 +70,11 @@ impl ClusterOrchestrator {
                 let mut last_err = None;
                 
                 while retries > 0 {
+                    if let Some(ref t) = token {
+                        if t.is_cancelled() {
+                            return Err(anyhow!("Upload cancelled"));
+                        }
+                    }
                     let mut file = tokio::fs::File::open(&file_path).await?;
                     file.seek(tokio::io::SeekFrom::Start(start_offset)).await?;
                     let mut stream = file.take(actual_size);
@@ -165,7 +178,13 @@ impl ClusterOrchestrator {
         dest_path: PathBuf,
         session_manager: Arc<crate::session_manager::SessionManager>,
         app_handle: Option<tauri::AppHandle>,
+        token: Option<CancellationToken>,
     ) -> Result<()> {
+        if let Some(ref t) = token {
+            if t.is_cancelled() {
+                return Err(anyhow!("Download cancelled"));
+            }
+        }
         use tokio::io::AsyncWriteExt;
         use grammers_client::media::Media;
 
@@ -178,12 +197,19 @@ impl ClusterOrchestrator {
             let message_id = chunk_meta.message_id;
             let part_index = chunk_meta.part_index;
             let session_manager = Arc::clone(&session_manager);
+            let token = token.clone();
 
             let task = tokio::spawn(async move {
                 let client = session_manager
                     .get_client_by_id(&account_id)
                     .await
                     .ok_or_else(|| anyhow!("Client for account {} not connected", account_id))?;
+
+                if let Some(ref t) = token {
+                    if t.is_cancelled() {
+                        return Err(anyhow!("Download cancelled"));
+                    }
+                }
 
                 let messages = client
                     .invoke(&tl::functions::messages::GetMessages {
