@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { FolderInfo, FileManifest, ColumnContent, SelectableItem } from '../types/file';
 import { useAppStore } from '../store/useAppStore';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export function useFileExplorer(category?: string) {
   const { activeAccountId } = useAppStore();
@@ -28,33 +29,43 @@ export function useFileExplorer(category?: string) {
           category,
           accountId: activeAccountId 
         });
-        return { folders: result[0], files: result[1] };
+        if (!Array.isArray(result)) throw new Error('Invalid response from get_category_content');
+        return { folders: result[0] || [], files: result[1] || [] };
       }
 
       const result = await invoke<[FolderInfo[], FileManifest[]]>('list_folder_content', { 
         folderId,
         accountId: activeAccountId 
       });
-      return { folders: result[0], files: result[1] };
+      if (!Array.isArray(result)) throw new Error('Invalid response from list_folder_content');
+      return { folders: result[0] || [], files: result[1] || [] };
     } catch (e) {
-      console.error('Failed to fetch folder content:', e);
+      console.error('Failed to fetch folder content:', getErrorMessage(e));
       return { folders: [], files: [] };
     }
   }, [activeAccountId, category]);
 
   const initColumns = useCallback(async () => {
-    const rootData = await fetchColumnData(null);
-    setColumns([rootData]);
-    setPath([null]);
-    setSelectedItems(new Set());
+    try {
+      const rootData = await fetchColumnData(null);
+      setColumns([rootData]);
+      setPath([null]);
+      setSelectedItems(new Set());
+    } catch (e) {
+      console.error('Failed to initialize columns:', getErrorMessage(e));
+    }
   }, [fetchColumnData]);
 
   const refreshCurrentView = useCallback(async (currentPath: (string | null)[]) => {
-    const newCols = [];
-    for (const p of currentPath) {
-      newCols.push(await fetchColumnData(p));
+    try {
+      const newCols = [];
+      for (const p of currentPath) {
+        newCols.push(await fetchColumnData(p));
+      }
+      setColumns(newCols);
+    } catch (e) {
+      console.error('Failed to refresh current view:', getErrorMessage(e));
     }
-    setColumns(newCols);
   }, [fetchColumnData]);
 
   // Initial load
@@ -72,20 +83,20 @@ export function useFileExplorer(category?: string) {
     dragItemRef, dropTargetRef, pathRef,
     refreshCurrentView, initColumns, fetchColumnData,
     navigateToItem: async (accountId: string, pathIds: string[], targetItemId: string) => {
-      // 1. Switch account if necessary (handled by store subscription usually, 
-      // but we need to ensure the columns refresh for the RIGHT account)
-      // The store's activeAccountId is a dependency of fetchColumnData
-      
-      // 2. Reconstruct path and columns
-      const fullPath: (string | null)[] = [null, ...pathIds];
-      const newCols = [];
-      for (const p of fullPath) {
-        newCols.push(await fetchColumnData(p));
+      try {
+        // 1. Reconstruct path and columns
+        const fullPath: (string | null)[] = [null, ...pathIds];
+        const newCols = [];
+        for (const p of fullPath) {
+          newCols.push(await fetchColumnData(p));
+        }
+        
+        setPath(fullPath);
+        setColumns(newCols);
+        setSelectedItems(new Set([targetItemId]));
+      } catch (e) {
+        console.error('Navigation to item failed:', getErrorMessage(e));
       }
-      
-      setPath(fullPath);
-      setColumns(newCols);
-      setSelectedItems(new Set([targetItemId]));
     }
   };
 }

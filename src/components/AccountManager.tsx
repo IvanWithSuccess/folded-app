@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LoginModal } from './LoginModal';
 import { invoke } from '@tauri-apps/api/core';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { 
   Plus, Users, LogOut, 
   RefreshCw, Cloud, HardDrive, Info, 
@@ -57,7 +58,8 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
   }, []);
 
   const handleLogout = async (id: string) => {
-    if (!window.confirm('Disconnect this account from the cloud?')) return;
+    const confirmed = await confirm('Disconnect this account from the cloud?');
+    if (!confirmed) return;
     try {
       await invoke('auth_logout', { accountId: id });
       logoutGlobal(id);
@@ -82,9 +84,9 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#09090b] overflow-hidden animate-in fade-in duration-300">
+    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden animate-in fade-in duration-300">
       {/* Topbar matching industrial style */}
-      <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800 shrink-0" style={{ backgroundColor: '#0a0a0c' }}>
+      <div className="h-12 flex items-center justify-between px-5 border-b border-border shrink-0 bg-surface">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-300">
             <Users size={14} className="text-blue-500" />

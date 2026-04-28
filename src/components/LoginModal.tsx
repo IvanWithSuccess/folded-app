@@ -33,6 +33,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
     }
   }, [step]); // Depend on step for manual transitions
 
+  // Cleanup on unmount: ensure no pending auths leak memory/sessions
+  useEffect(() => {
+    return () => {
+      invoke('auth_cancel').catch(e => console.error('Failed to cancel auth on cleanup:', e));
+    };
+  }, []);
+
   // Auto-refresh QR every 115 seconds (Telegram QRs usually last 2 mins)
   useEffect(() => {
     let refreshTimer: number;

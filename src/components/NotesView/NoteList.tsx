@@ -74,20 +74,22 @@ export const NoteList: React.FC<NoteListProps> = ({
           </div>
         ) : (
           <div className="space-y-1">
-            {notes.map(note => (
-              <div 
-                key={note.id}
-                onClick={() => onSelect(note)}
+            {notes.map(note => {
+              if (!note || !note.id) return null;
+              return (
+                <div 
+                  key={note.id}
+                  onClick={() => onSelect(note)}
                 className={`group p-4 rounded-xl cursor-pointer transition-all border mb-2
                   ${selectedNoteId === note.id 
                     ? 'bg-zinc-800/80 border-blue-500/50 shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-md translate-x-1' 
                     : 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-800/40 hover:border-zinc-700/50 hover:translate-x-1'}`}
               >
                 <div className="flex justify-between items-start gap-3 mb-2">
-                   <span className={`text-[12px] font-medium line-clamp-2 leading-relaxed flex-1
-                     ${selectedNoteId === note.id ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>
-                     {note.content || 'Empty note'}
-                   </span>
+                    <span className={`text-[12px] font-medium line-clamp-2 leading-relaxed flex-1
+                      ${selectedNoteId === note.id ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>
+                      {typeof note.content === 'string' ? note.content : String(note.content || 'Empty note')}
+                    </span>
                 </div>
                 <div className="flex items-center justify-between">
                    <div className="flex items-center gap-1.5 opacity-40 group-hover:opacity-60 transition-opacity">
@@ -99,9 +101,10 @@ export const NoteList: React.FC<NoteListProps> = ({
                    {note.from_self && (
                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                    )}
-                </div>
+                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

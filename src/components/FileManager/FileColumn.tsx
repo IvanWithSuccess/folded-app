@@ -38,7 +38,7 @@ export const FileColumn: React.FC<FileColumnProps> = ({
 
   return (
     <div 
-      className={`flex-none w-[260px] border-r border-zinc-800 flex flex-col h-full bg-zinc-950/20 relative
+      className={`flex-none w-[260px] border-r border-border flex flex-col h-full bg-background/20 relative
         ${dropTarget === (currentPathId || 'root') ? 'bg-blue-500/5' : ''}`}
       onDragOver={(e) => onDragOver(e, null, columnIdx)}
       onDragLeave={onDragLeave}

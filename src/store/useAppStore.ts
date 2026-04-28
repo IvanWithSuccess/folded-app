@@ -41,6 +41,10 @@ interface AppStore {
   activeMirrors: Record<string, string>;
   logoutAccount: (id: string) => void;
   clearNavigation: () => void;
+
+  // Theme
+  theme: string;
+  setTheme: (themeId: string) => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -61,6 +65,9 @@ export const useAppStore = create<AppStore>((set) => ({
   activeTask: null,
   taskProgress: 0,
   queueTasks: [],
+
+  theme: 'deep_dark',
+  setTheme: (themeId) => set({ theme: themeId }),
   
   setAccounts: (accounts) => set({ accounts }),
   setActiveAccount: (id) => set({ activeAccountId: id }),
@@ -104,9 +111,12 @@ export const useAppStore = create<AppStore>((set) => ({
   logoutAccount: (id) => set((state) => {
     const nextAccounts = state.accounts.filter(a => a.id !== id);
     const wasActive = state.activeAccountId === id;
+    const shouldGoToAuth = nextAccounts.length === 0;
+    
     return {
       accounts: nextAccounts,
       activeAccountId: wasActive ? (nextAccounts[0]?.id || null) : state.activeAccountId,
+      appState: shouldGoToAuth ? 'AUTH' : state.appState
     };
   }),
 }));

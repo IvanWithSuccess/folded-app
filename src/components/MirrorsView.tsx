@@ -176,9 +176,9 @@ export const MirrorsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#09090b] overflow-hidden animate-in fade-in duration-300">
+    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden animate-in fade-in duration-300">
       {/* Topbar matching FileManager Style */}
-      <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800 shrink-0" style={{ backgroundColor: '#0a0a0c' }}>
+      <div className="h-12 flex items-center justify-between px-5 border-b border-border shrink-0 bg-surface">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-300">
             <RefreshCw size={14} className="text-blue-500" />
@@ -298,8 +298,8 @@ export const MirrorsView: React.FC = () => {
       {/* Add Modal - Matching FileModals style */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0a0a0c] border border-zinc-800/80 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="h-14 flex items-center justify-between px-6 border-b border-zinc-800 bg-[#0a0a0c]">
+          <div className="bg-surface border border-border/80 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="h-14 flex items-center justify-between px-6 border-b border-border bg-surface">
               <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Establish Sync Link</span>
               <button onClick={() => setShowAddModal(false)} className="text-zinc-500 hover:text-white">
                 <X size={14} />
@@ -353,7 +353,7 @@ export const MirrorsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-6 bg-[#0a0a0c] border-t border-zinc-800 flex gap-3">
+            <div className="p-6 bg-surface border-t border-border flex gap-3">
               <button 
                 onClick={() => setShowAddModal(false)}
                 className="flex-1 py-3 bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:text-white hover:bg-zinc-800 transition-all rounded-xl"

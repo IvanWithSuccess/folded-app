@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { open } from '@tauri-apps/plugin-dialog';
+import { useAppStore } from '../store/useAppStore';
+import { THEMES } from '../theme/themes';
 import { 
   Settings, Folder, RefreshCw, HardDrive, ShieldAlert,
   Save, AlertTriangle, Monitor, Webhook, AppWindow, Database, Zap,
-  ChevronRight, Trash2, Eraser
+  ChevronRight, Trash2, Eraser, Palette, Check
 } from 'lucide-react';
-import { useAppStore } from '../store/useAppStore';
-import { listen } from '@tauri-apps/api/event';
 
 interface AppSettings {
   downloadDirectory: string;
@@ -21,6 +22,7 @@ interface AppSettings {
   defaultOpenMode: 'system' | 'browser';
   cacheMaxMb: string;     // Max file cache size in MB
   parallelWorkers: string; // Parallel download threads
+  theme: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -35,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultOpenMode: 'system',
   cacheMaxMb: '1024', // 1 GB default
   parallelWorkers: '3',
+  theme: 'deep_dark',
 };
 
 export const SettingsView: React.FC = () => {
@@ -43,7 +46,7 @@ export const SettingsView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [cacheStats, setCacheStats] = useState<{ file_count: number; total_bytes: number } | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
-  const { accounts } = useAppStore();
+  const { accounts, theme, setTheme } = useAppStore();
 
   useEffect(() => {
     loadSettings();
@@ -69,6 +72,7 @@ export const SettingsView: React.FC = () => {
       const openMode = await getSet('default_open_mode', 'system') as 'system' | 'browser';
       const cMaxMb = await getSet('cache_max_mb', '1024');
       const pWorkers = await getSet('parallel_workers', '3');
+      const currentTheme = await getSet('theme', 'deep_dark');
 
 
       setSettings({
@@ -83,6 +87,7 @@ export const SettingsView: React.FC = () => {
         defaultOpenMode: openMode,
         cacheMaxMb: cMaxMb,
         parallelWorkers: pWorkers,
+        theme: currentTheme,
       });
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -97,6 +102,11 @@ export const SettingsView: React.FC = () => {
     setSaving(true);
     
     try {
+      if (newSettings.theme) {
+        setTheme(newSettings.theme);
+        await invoke('update_setting', { key: 'theme', value: newSettings.theme });
+      }
+
       await invoke('update_setting', { key: 'download_dir', value: updated.downloadDirectory });
       await invoke('update_setting', { key: 'background_sync', value: updated.backgroundSync ? 'true' : 'false' });
       await invoke('update_setting', { key: 'chunk_size_gb', value: updated.chunkSize });
@@ -143,7 +153,8 @@ export const SettingsView: React.FC = () => {
   };
 
   const clearCache = async () => {
-    if (window.confirm('Are you sure you want to Wipe the local database? This will require a full re-sync from Telegram.')) {
+    const confirmed = await confirm('Are you sure you want to Wipe the local database? This will require a full re-sync from Telegram.');
+    if (confirmed) {
         try {
             await invoke('purge_local_cache');
             alert('Database wiped successfully. Please restart the application to begin a fresh sync.');
@@ -165,7 +176,8 @@ export const SettingsView: React.FC = () => {
   };
 
   const handleClearFileCache = async () => {
-    if (!window.confirm('Clear the local file cache? Files will be re-downloaded on next access.')) return;
+    const confirmed = await confirm('Clear the local file cache? Files will be re-downloaded on next access.');
+    if (!confirmed) return;
     setClearingCache(true);
     try {
       await invoke('clear_file_cache');
@@ -195,9 +207,9 @@ export const SettingsView: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#09090b] overflow-hidden animate-in fade-in duration-300">
+    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden animate-in fade-in duration-300">
       {/* Topbar matching industrial style */}
-      <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800 shrink-0" style={{ backgroundColor: '#0a0a0c' }}>
+      <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800 shrink-0" style={{ backgroundColor: 'var(--app-surface)' }}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-300">
             <Settings size={14} className="text-blue-500" />
@@ -223,7 +235,7 @@ export const SettingsView: React.FC = () => {
               
               <div className="flex items-center justify-between gap-8">
                  <div className="flex flex-col flex-1">
-                    <span className="text-[11px] font-bold text-white uppercase tracking-tight">Downloads Directory</span>
+                    <span className="text-[11px] font-bold text-foreground uppercase tracking-tight">Downloads Directory</span>
                     <span className="text-[10px] text-zinc-500 font-medium mt-0.5">Primary storage node for retrieved assets.</span>
                  </div>
                  <div className="flex items-center gap-2 flex-1 justify-end max-w-[60%]">
@@ -241,7 +253,7 @@ export const SettingsView: React.FC = () => {
 
               <div className="flex items-center justify-between gap-8 pt-4 border-t border-zinc-800/50">
                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-white uppercase tracking-tight">Default Opening Mode</span>
+                    <span className="text-[11px] font-bold text-foreground uppercase tracking-tight">Default Opening Mode</span>
                     <span className="text-[10px] text-zinc-500 font-medium mt-0.5">Handler for cloud assets.</span>
                  </div>
                  <select 
@@ -256,6 +268,50 @@ export const SettingsView: React.FC = () => {
            </div>
         </section>
 
+        {/* Visual Identity / Themes */}
+        <section className="space-y-3">
+           <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.25em] flex items-center gap-2 ml-1">
+             <Palette size={12} />
+             Visual Identity
+           </h3>
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Object.values(THEMES).map((t) => (
+                <div 
+                  key={t.id}
+                  onClick={() => handleSave({ theme: t.id })}
+                  className={`relative group cursor-pointer border rounded-xl overflow-hidden transition-all duration-300 ${
+                    settings.theme === t.id ? 'border-blue-500 ring-1 ring-blue-500' : 'border-zinc-800 hover:border-zinc-700'
+                  }`}
+                  style={{ backgroundColor: t.colors.bg }}
+                >
+                   {/* Preview Mockup */}
+                   <div className="h-24 p-3 flex flex-col gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1.5">
+                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: t.colors.accent }}></div>
+                         <div className="flex-1 h-3 rounded bg-white/5"></div>
+                      </div>
+                      <div className="space-y-1.5">
+                         <div className="w-full h-2 rounded bg-white/5"></div>
+                         <div className="w-2/3 h-2 rounded bg-white/5"></div>
+                      </div>
+                      <div className="mt-auto flex justify-between items-center">
+                         <div className="w-10 h-3 rounded bg-white/10"></div>
+                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.colors.accent }}></div>
+                      </div>
+                   </div>
+
+                   {/* Footer Info */}
+                   <div className="px-3 py-2.5 bg-black/40 backdrop-blur-md border-t border-white/5 flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-300">{t.name}</span>
+                      {settings.theme === t.id && (
+                        <Check size={12} className="text-blue-500" />
+                      )}
+                   </div>
+                </div>
+              ))}
+           </div>
+        </section>
+
         {/* System Integration */}
         <section className="space-y-3">
            <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.25em] flex items-center gap-2 ml-1">
@@ -266,7 +322,7 @@ export const SettingsView: React.FC = () => {
               
               <div className="flex items-center justify-between gap-8">
                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-white uppercase tracking-tight">Expose Virtual Volume</span>
+                    <span className="text-[11px] font-bold text-foreground uppercase tracking-tight">Expose Virtual Volume</span>
                     <span className="text-[10px] text-zinc-500 font-medium mt-0.5">Mount cloud storage as a native macOS drive.</span>
                  </div>
                  <button 

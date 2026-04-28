@@ -124,7 +124,7 @@ impl MetadataCache {
 
     pub async fn get_cache_stats(&self) -> Result<(u64, u64)> {
         let row: (i64, i64) = sqlx::query_as(
-            "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM files WHERE deleted_at IS NULL"
+            "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM file_cache"
         ).fetch_one(&self.pool).await?;
         Ok((row.0 as u64, row.1 as u64))
     }

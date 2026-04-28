@@ -1,39 +1,49 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #ffffff;
-  --color-primary-foreground: #000000;
+  --color-primary: var(--app-text);
+  --color-primary-foreground: var(--app-bg);
   
-  --color-background: #09090b; /* zinc-950 */
-  --color-foreground: #fafafa; /* zinc-50 */
+  --color-background: var(--app-bg);
+  --color-foreground: var(--app-text);
   
-  --color-card: #09090b;
-  --color-card-foreground: #fafafa;
+  --color-card: var(--app-surface);
+  --color-card-foreground: var(--app-text);
   
-  --color-popover: #09090b;
-  --color-popover-foreground: #fafafa;
+  --color-popover: var(--app-surface);
+  --color-popover-foreground: var(--app-text);
   
-  --color-muted: #18181b; /* zinc-900 */
-  --color-muted-foreground: #a1a1aa; /* zinc-400 */
+  --color-muted: var(--app-surface);
+  --color-muted-foreground: var(--app-text-muted);
   
-  --color-accent: #27272a; /* zinc-800 */
-  --color-accent-foreground: #fafafa;
+  --color-accent: var(--app-accent);
+  --color-accent-foreground: var(--app-text);
   
   --color-destructive: #7f1d1d;
   --color-destructive-foreground: #fafafa;
   
-  --color-border: #27272a; /* zinc-800 */
-  --color-input: #27272a;
-  --color-ring: #d4d4d8; /* zinc-300 */
+  --color-border: var(--app-border);
+  --color-input: var(--app-border);
+  --color-ring: var(--app-accent);
 
   --radius-lg: 0.5rem;
   --radius-md: calc(0.5rem - 2px);
   --radius-sm: calc(0.5rem - 4px);
 }
 
+:root {
+  /* Default values (Deep Dark) to prevent flash of unstyled content */
+  --app-bg: #09090b;
+  --app-surface: #0a0a0c;
+  --app-border: #18181b;
+  --app-accent: #3b82f6;
+  --app-text: #ffffff;
+  --app-text-muted: #71717a;
+}
+
 /* Direct CSS - no @apply in base to ensure WebKit compatibility */
 *, *::before, *::after {
-  border-color: #27272a;
+  border-color: var(--app-border);
 }
 
 html, body {
@@ -41,18 +51,27 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background-color: #09090b;
-  color: #fafafa;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Nuclear option: Hide Vite Error Overlay if it somehow bypasses JS listeners */
+vite-error-overlay,
+#vite-error-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 #root {
   width: 100%;
   height: 100%;
-  background-color: #09090b;
+  background-color: var(--app-bg);
 }
 
 /* Custom scrollbar for monochromatic look */
@@ -66,17 +85,18 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--app-border);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--app-text-muted);
 }
 
 /* Selection color */
 ::selection {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--app-accent);
+  color: white;
 }
 
 /* Context menu animation */

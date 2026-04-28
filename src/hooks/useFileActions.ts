@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { SelectableItem, FileManifest, FolderInfo } from '../types/file';
 import { isFolder } from '../utils/fileUtils';
+import { getErrorMessage } from '../utils/errorUtils';
 
 interface UseFileActionsProps {
   activeDriveId: string | null;
@@ -25,7 +26,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('pull_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      console.error('Sync failed:', e);
+      console.error('Sync failed:', getErrorMessage(e));
     } finally {
       setIsLoading(false);
     }
@@ -41,7 +42,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Failed to create folder: ' + ((e as Error).message || String(e)));
+      alert('Failed to create folder: ' + getErrorMessage(e));
     }
   }, [activeDriveId, path, refresh]);
 
@@ -55,7 +56,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Rename failed: ' + ((e as Error).message || String(e)));
+      alert('Rename failed: ' + getErrorMessage(e));
     }
   }, [path, refresh]);
 
@@ -72,7 +73,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Delete failed: ' + ((e as Error).message || String(e)));
+      alert('Delete failed: ' + getErrorMessage(e));
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +95,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         destPath
       });
     } catch (e) {
-      alert('Download failed: ' + ((e as Error).message || String(e)));
+      alert('Download failed: ' + getErrorMessage(e));
     }
   }, []);
 
@@ -119,7 +120,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert(`${mode === 'move' ? 'Move' : 'Copy'} failed: ` + ((e as Error).message || String(e)));
+      alert(`${mode === 'move' ? 'Move' : 'Copy'} failed: ` + getErrorMessage(e));
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +142,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         targetPath
       });
     } catch (e) {
-      alert('Download failed: ' + ((e as Error).message || String(e)));
+      alert('Download failed: ' + getErrorMessage(e));
     } finally {
       setIsLoading(false);
     }
@@ -179,7 +180,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Upload failed: ' + ((e as Error).message || String(e)));
+      alert('Upload failed: ' + getErrorMessage(e));
     } finally {
       setIsLoading(false);
     }
@@ -195,7 +196,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Failed to toggle starred: ' + ((e as Error).message || String(e)));
+      alert('Failed to toggle starred: ' + getErrorMessage(e));
     }
   }, [activeDriveId, path, refresh]);
 
@@ -206,7 +207,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Delete with versions failed: ' + ((e as Error).message || String(e)));
+      alert('Delete with versions failed: ' + getErrorMessage(e));
     } finally {
       setIsLoading(false);
     }

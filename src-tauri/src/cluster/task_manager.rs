@@ -161,7 +161,7 @@ impl TaskManager {
         let mut folder_mapping: HashMap<std::path::PathBuf, String> = HashMap::new();
         
         let root_folder_name = root_path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        let root_folder_id = self.cache.create_folder(
+        let root_folder_id = self.cache.get_or_create_folder(
             root_folder_name, 
             payload.target_parent_id.clone(), 
             Some(payload.account_id.clone())
@@ -189,7 +189,7 @@ impl TaskManager {
 
             if entry.file_type().is_dir() {
                 let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-                let new_fid = self.cache.create_folder(
+                let new_fid = self.cache.get_or_create_folder(
                     name, 
                     Some(remote_parent_id), 
                     Some(payload.account_id.clone())

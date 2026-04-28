@@ -13,6 +13,7 @@ import { FileInspector } from './FileInspector';
 import { FileModals } from './FileModals';
 import { FileContextMenu } from './FileContextMenu';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 import { SearchResults } from './SearchResults';
 
@@ -38,6 +39,37 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [inspectItem, setInspectItem] = useState<SelectableItem | null>(null);
   const prevSyncing = useRef(false);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<'name' | 'date' | 'size'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Logic to sort data within columns
+  const getSortedColumns = useCallback(() => {
+    return explorer.columns.map(col => {
+      const sortedFolders = [...col.folders].sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'name') cmp = a.name.localeCompare(b.name);
+        else if (sortField === 'date') cmp = a.created_at - b.created_at;
+        // Folders don't have size, so we treat them as equal for size sort
+        
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+
+      const sortedFiles = [...col.files].sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'name') cmp = a.name.localeCompare(b.name);
+        else if (sortField === 'date') cmp = a.created_at - b.created_at;
+        else if (sortField === 'size') cmp = a.total_size - b.total_size;
+        
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+
+      return { folders: sortedFolders, files: sortedFiles };
+    });
+  }, [explorer.columns, sortField, sortDirection]);
+
+  const sortedColumns = getSortedColumns();
 
   // External Navigation listener
   useEffect(() => {
@@ -85,7 +117,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         const results = await invoke<FileManifest[]>('global_search', { query: searchQuery });
         setSearchResults(results);
       } catch (e) {
-        console.error('Search failed:', e);
+        console.error('Search failed:', getErrorMessage(e));
       } finally {
         setIsSearching(false);
       }
@@ -113,8 +145,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
       // 5. Inspect the revealed item
       setInspectItem(item as SelectableItem);
     } catch (e) {
-      console.error('Reveal failed:', e);
-      alert('Failed to reveal file location: ' + ((e as Error).message || String(e)));
+      console.error('Reveal failed:', getErrorMessage(e));
+      alert('Failed to reveal file location: ' + getErrorMessage(e));
     }
   };
 
@@ -128,9 +160,13 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
   
   useEffect(() => {
     const loadDefaultMode = async () => {
-      const mode = await invoke<string | null>('get_setting', { key: 'default_open_mode' });
-      if (mode === 'browser') setDefaultOpenMode('browser');
-      else setDefaultOpenMode('system');
+      try {
+        const mode = await invoke<string | null>('get_setting', { key: 'default_open_mode' });
+        if (mode === 'browser') setDefaultOpenMode('browser');
+        else setDefaultOpenMode('system');
+      } catch (e) {
+        console.error('Failed to load setting:', getErrorMessage(e));
+      }
     };
     loadDefaultMode();
   }, []);
@@ -207,8 +243,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         try {
           await invoke('open_system_file', { path: url });
         } catch (e) {
-          console.error('Failed to open browser URL:', e);
-          alert('Failed to open file in browser: ' + ((e as Error).message || String(e)));
+          console.error('Failed to open browser URL:', getErrorMessage(e));
+          alert('Failed to open file in browser: ' + getErrorMessage(e));
         }
       }
     } else {
@@ -217,8 +253,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         const tmpPath = await invoke<string>('cluster_download_to_tmp', { fileId: item.id });
         await invoke('open_system_file', { path: tmpPath });
       } catch (e) {
-        console.error('Open failed:', e);
-        alert('Failed to open file: ' + ((e as Error).message || String(e)));
+        console.error('Open failed:', getErrorMessage(e));
+        alert('Failed to open file: ' + getErrorMessage(e));
       }
     }
   };
@@ -334,6 +370,10 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         setSearchQuery={setSearchQuery}
         onSync={actions.handleSync}
         isSyncing={isSyncing}
+        sortField={sortField}
+        sortDirection={sortDirection}
+        onSortFieldChange={setSortField}
+        onSortDirectionChange={setSortDirection}
         onNavigateToBreadcrumb={(idx) => {
           const newPath = explorer.path.slice(0, idx + 1);
           explorer.setPath(newPath);
@@ -345,7 +385,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         category={category}
       />
 
-      <div className="flex-1 flex overflow-hidden bg-zinc-950">
+      <div className="flex-1 flex overflow-hidden bg-background">
         {searchQuery.trim() ? (
           <SearchResults 
             results={searchResults} 
@@ -360,7 +400,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
               setInspectItem(null);
             }}
           >
-            {explorer.columns.map((col, idx) => (
+            {sortedColumns.map((col, idx) => (
               <FileColumn 
                 key={`${idx}-${explorer.path[idx]}`}
                 columnIdx={idx}

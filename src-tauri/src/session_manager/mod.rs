@@ -138,26 +138,16 @@ impl SessionManager {
             let client = Client::new(handle);
             tokio::spawn(runner.run());
 
-            // Check if the session is still valid
-            match client.get_me().await {
-                Ok(_user) => {
-                    log::info!("Session for account {} is valid", acc.id);
-                    active.push(ActiveSession {
-                        client,
-                        account_info: acc.clone(),
-                    });
-                }
-                Err(e) => {
-                    log::warn!("Session for account {} expired or invalid: {} — marking as dead", acc.id, e);
-                    dead_account_ids.push(acc.id.clone());
-                    client.disconnect();
-                    // Remove the broken session file
-                    let _ = std::fs::remove_file(&session_path);
-                }
-            }
+            // We NO LONGER check health here with client.get_me().
+            // This prevents deleting valid sessions when there is no internet on startup.
+            // Health verification can happen periodically in the background.
+            active.push(ActiveSession {
+                client,
+                account_info: acc.clone(),
+            });
         }
 
-        // Clean up accounts.json — remove all dead entries
+        // Clean up accounts.json — remove dead entries (those we couldn't even open)
         if !dead_account_ids.is_empty() {
             let surviving: Vec<TelegramAccount> = accounts.into_iter()
                 .filter(|a| !dead_account_ids.contains(&a.id))
@@ -194,6 +184,36 @@ impl SessionManager {
     pub async fn get_client_by_id(&self, account_id: &str) -> Option<Client> {
         let active = self.active_sessions.lock().await;
         active.iter().find(|s| s.account_info.id == account_id).map(|s| s.client.clone())
+    }
+
+    pub async fn check_session_health(&self, account_id: &str) -> bool {
+        let client = match self.get_client_by_id(account_id).await {
+            Some(c) => c,
+            None => return false,
+        };
+
+        match client.get_me().await {
+            Ok(_) => true,
+            Err(e) => {
+                match e {
+                    grammers_client::InvocationError::Rpc(rpc) => {
+                        // These errors mean the session is actually dead
+                        if rpc.name == "AUTH_KEY_UNREGISTERED" || rpc.name == "USER_DEACTIVATED" || rpc.name == "SESSION_REVOKED" {
+                            log::warn!("Session {} is definitively dead: {}", account_id, rpc.name);
+                            false
+                        } else {
+                            // Other RPC errors might be temporary or related to other things
+                            true
+                        }
+                    }
+                    _ => {
+                        // Network errors, timeouts, etc. — assume session is still valid but we're offline
+                        log::info!("Network error checking session {}: assuming it is still valid", account_id);
+                        true
+                    }
+                }
+            }
+        }
     }
 
     pub async fn request_login_code(&self, phone: &str) -> Result<AuthResponse> {
@@ -360,6 +380,28 @@ impl SessionManager {
         Ok(())
     }
 
+    pub async fn clear_pending_auths(&self) {
+        {
+            let mut pending = self.pending_auths.lock().await;
+            for auth in pending.drain(..) {
+                auth.client.disconnect();
+            }
+        }
+        {
+            let mut pending_pass = self.pending_passwords.lock().await;
+            for auth in pending_pass.drain(..) {
+                auth.client.disconnect();
+            }
+        }
+        {
+            let mut pending_qr = self.pending_qr.lock().await;
+            if let Some(qr) = pending_qr.take() {
+                qr.client.disconnect();
+            }
+        }
+        log::info!("All pending authentications cleared.");
+    }
+
     async fn register_active_session(&self, old_client: Client, old_session: Arc<MemorySession>, user: User, phone: &str) -> Result<TelegramAccount> {
         let account_id = user.id().to_string();
         let account = TelegramAccount {
@@ -384,9 +426,12 @@ impl SessionManager {
         permanent_session.set_update_state(UpdateState::All(updates)).await;
         
         // Migrate DC options (important for auth keys)
-        for dc_id in 1..=10 { // Checks more DCs just in case
+        for dc_id in 1..=10 { 
             if let Some(opt) = old_session.dc_option(dc_id) {
-                permanent_session.set_dc_option(&opt).await;
+                // IMPORTANT: Only migrate if it has an auth key to avoid overwriting valid ones with NULL
+                if opt.auth_key.is_some() {
+                    permanent_session.set_dc_option(&opt).await;
+                }
             }
         }
         

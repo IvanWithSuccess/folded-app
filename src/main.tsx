@@ -1,23 +1,40 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import './styles/index.css';
+import { getErrorMessage } from './utils/errorUtils';
 
-// Suppress Tauri dev overlay for undefined/null promise rejections.
-// These are caused by IPC teardown noise (e.g. component unmounts, canceled events)
-// and are not real errors. Real errors are still logged to console.
+// NUCLEAR SUPPRESSION: This runs before anything else to catch rejections 
+// that Vite might try to turn into a yellow screen.
 window.addEventListener('unhandledrejection', (event) => {
   if (event.reason === undefined || event.reason === null) {
     event.preventDefault();
+    event.stopImmediatePropagation();
     return;
   }
-  // Log real rejections but still prevent the intrusive Tauri overlay
-  console.error('[Unhandled Rejection]', event.reason);
+  const msg = getErrorMessage(event.reason);
+  if (msg.includes('IPC') || msg.includes('teardown') || msg.includes('cancel')) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+  // In development, Vite overlay is annoying for non-critical rejections.
   event.preventDefault();
-});
+}, true); // Use capture phase to be first
+
+window.addEventListener('error', (event) => {
+  if (!event.error) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
+
+import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary name="ROOT_APP">
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );

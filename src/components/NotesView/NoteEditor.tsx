@@ -18,7 +18,9 @@ import {
 } from 'lucide-react';
 import { NoteInfo } from '../../hooks/useNotes';
 import { invoke } from '@tauri-apps/api/core';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { FilePickerModal } from './FilePickerModal';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 interface NoteEditorProps {
   note: NoteInfo | null;
@@ -78,10 +80,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     try {
       const ids = idsString.split(',').filter(id => id.trim().length > 0);
       const allFiles = await invoke<FileManifest[]>('cluster_list_files');
-      const manifests = ids.map(id => allFiles.find(f => f.id === id)).filter((f): f is FileManifest => !!f);
+      if (!Array.isArray(allFiles)) {
+        setAttachedFiles([]);
+        return;
+      }
+      const manifests = ids.map(id => allFiles.find(f => f?.id === id)).filter((f): f is FileManifest => !!f);
       setAttachedFiles(manifests);
     } catch (e) {
-      console.error('Error fetching attachment info:', e);
+      console.error('Error fetching attachment info:', getErrorMessage(e));
     } finally {
       setLoadingAttachments(false);
     }
@@ -112,7 +118,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleDetachFile = async (fileId: string) => {
     if (!note) return;
-    if (!window.confirm('Remove this attachment?')) return;
+    const confirmed = await confirm('Remove this attachment?');
+    if (!confirmed) return;
     await onDetach(fileId);
   };
 
@@ -121,7 +128,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const path = await invoke<string>('cluster_download_to_tmp', { fileId });
       await invoke('open_system_file', { path });
     } catch (e) {
-      alert('Failed to open file: ' + ((e as Error).message || String(e)));
+      alert('Failed to open file: ' + getErrorMessage(e));
     }
   };
 
@@ -189,7 +196,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
              {!isNew && (
                <button 
-                 onClick={() => { Promise.resolve(onDelete(note!.id)).catch(e => console.error('Delete note error:', e)); }}
+                 onClick={() => { 
+                   if (note?.id) {
+                     onDelete(note.id);
+                   }
+                 }}
                  className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-95"
                  title="Delete Note"
                >
@@ -206,7 +217,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             readOnly={isReadOnly}
             className={`flex-1 w-full bg-transparent text-lg text-zinc-100 placeholder:text-zinc-800 outline-none resize-none leading-relaxed font-medium transition-all selection:bg-white selection:text-black
               ${isReadOnly ? 'opacity-70 cursor-default' : ''}`}
-            value={content}
+            value={typeof content === 'string' ? content : ''}
             onChange={(e) => { 
               if (isReadOnly) return;
               setContent(e.target.value); 

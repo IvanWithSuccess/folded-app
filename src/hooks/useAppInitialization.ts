@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store/useAppStore';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export function useAppInitialization() {
   const { 
@@ -13,6 +14,7 @@ export function useAppInitialization() {
   } = useAppStore();
 
   const startSync = useCallback(async (account: any) => {
+    if (!account) return;
     setIsSyncing(true);
     setSyncStatus('Indexing messages...', 20);
     
@@ -23,7 +25,9 @@ export function useAppInitialization() {
       
       setSyncStatus('Ready', 100);
     } catch (e) {
-      console.error('Sync failed:', e);
+      const msg = getErrorMessage(e);
+      console.error('Sync failed:', msg);
+      setSyncStatus(`Sync issue: ${msg}`, 100);
     } finally {
       setIsSyncing(false);
     }
@@ -38,6 +42,7 @@ export function useAppInitialization() {
         setAppState('ONBOARDING');
       }
     } catch (e) {
+      console.warn('Failed to check onboarding status, defaulting to READY:', getErrorMessage(e));
       setAppState('READY');
     }
   }, [setAppState]);
@@ -72,7 +77,7 @@ export function useAppInitialization() {
       // Once sync is done, set to READY
       setAppState('READY');
     } catch (e) {
-      console.error('Initialization failed:', e);
+      console.error('Initialization failed:', getErrorMessage(e));
       setAppState('AUTH');
     }
   }, [setAccounts, setAppState, setActiveAccount, setActiveView, startSync]);

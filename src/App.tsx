@@ -13,8 +13,10 @@ import { SyncSplashScreen } from './components/SyncSplashScreen';
 import { OnboardingStorage } from './components/OnboardingStorage';
 import { SettingsView } from './components/SettingsView';
 import { MirrorsView } from './components/MirrorsView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // UI
+import { applyTheme } from './theme/themes';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -33,16 +35,34 @@ function App() {
     setActiveAccount,
     setActiveView,
     setNodeStatus,
-    setActiveTask
+    setActiveTask,
+    theme,
+    setTheme
   } = useAppStore();
 
   const { initialize, startSync, checkOnboarding } = useAppInitialization();
   useTaskSync();
   const taskTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Apply theme globally
   useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    // Initial theme load
+    const loadTheme = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const savedTheme = await invoke<string | null>('get_setting', { key: 'theme' });
+        if (savedTheme) setTheme(savedTheme);
+      } catch (e) {
+        console.error('Failed to load theme:', e);
+      }
+    };
+    loadTheme();
     initialize();
-  }, [initialize]);
+  }, [initialize, setTheme]);
 
   // Listen for backend progress events
   useEffect(() => {
@@ -85,7 +105,13 @@ function App() {
 
     return () => {
       isMounted = false;
-      unlistenFuncs.forEach(fn => fn());
+      unlistenFuncs.forEach(fn => {
+        try {
+          fn();
+        } catch (e) {
+          console.error('Failed to unlisten:', e);
+        }
+      });
     };
   }, [setActiveTask]);
 
@@ -110,7 +136,7 @@ function App() {
   // Global Overlay States (Startup, Auth, Sync, Onboarding)
   if (appState === 'STARTUP') {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#09090b] text-zinc-600">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-zinc-600">
         <Loader2 className="animate-spin mb-4" size={32} />
         <span className="text-[10px] font-black uppercase tracking-[0.3em]">Establishing Network Connection</span>
       </div>
@@ -149,33 +175,58 @@ function App() {
 
   // --- Main Ready State ---
   return (
-    <div 
-      className="flex h-screen w-screen overflow-hidden font-sans"
-      style={{ backgroundColor: '#09090b', color: '#fafafa' }}
-    >
+    <div className="flex h-screen w-screen overflow-hidden font-sans bg-background text-foreground">
       {/* Global Sidebar (Zustand-connected) */}
-      <Sidebar />
+      <ErrorBoundary name="SIDEBAR">
+        <Sidebar />
+      </ErrorBoundary>
 
       {/* Main Content Area */}
       <main className="flex-1 h-full flex flex-col overflow-hidden relative">
         <AnimateContent key={activeView}>
-           {activeView === 'FILES' && <FileManager />}
-           {activeView === 'PHOTOS' && <FileManager category="PHOTOS" />}
-           {activeView === 'DOCUMENTS' && <FileManager category="DOCUMENTS" />}
-           {activeView === 'STARRED' && <FileManager category="STARRED" />}
-           {activeView === 'NOTES' && <NotesView />}
-           {activeView === 'ACCOUNTS' && (
-             <AccountManager 
-               onAccountsEmpty={() => setAppState('AUTH')} 
-             />
+           {activeView === 'FILES' && (
+             <ErrorBoundary name="FILE_MANAGER">
+               <FileManager />
+             </ErrorBoundary>
            )}
-           {activeView === 'MIRRORS' && <MirrorsView />}
+           {activeView === 'PHOTOS' && (
+             <ErrorBoundary name="FILE_MANAGER_PHOTOS">
+               <FileManager category="PHOTOS" />
+             </ErrorBoundary>
+           )}
+           {activeView === 'DOCUMENTS' && (
+             <ErrorBoundary name="FILE_MANAGER_DOCS">
+               <FileManager category="DOCUMENTS" />
+             </ErrorBoundary>
+           )}
+           {activeView === 'STARRED' && (
+             <ErrorBoundary name="FILE_MANAGER_STARRED">
+               <FileManager category="STARRED" />
+             </ErrorBoundary>
+           )}
+           {activeView === 'NOTES' && (
+             <ErrorBoundary name="NOTES_VIEW">
+               <NotesView />
+             </ErrorBoundary>
+           )}
+           {activeView === 'ACCOUNTS' && (
+             <ErrorBoundary name="ACCOUNT_MANAGER">
+               <AccountManager 
+                 onAccountsEmpty={() => setAppState('AUTH')} 
+               />
+             </ErrorBoundary>
+           )}
+           {activeView === 'MIRRORS' && (
+             <ErrorBoundary name="MIRRORS_VIEW">
+               <MirrorsView />
+             </ErrorBoundary>
+           )}
            {activeView === 'SETTINGS' && (
-             <SettingsView />
+             <ErrorBoundary name="SETTINGS_VIEW">
+               <SettingsView />
+             </ErrorBoundary>
            )}
         </AnimateContent>
-        
-
       </main>
     </div>
   );

@@ -129,10 +129,48 @@ pub fn set_autostart(enabled: bool) -> Result<()> {
         }
     }
     
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        let _ = enabled;
-        log::warn!("Autostart management not yet implemented for this OS");
+        let exe_path = std::env::current_exe()?;
+        let path_str = exe_path.to_string_lossy();
+        let app_name = "FoldedCloud";
+
+        if enabled {
+            log::info!("Windows: Enabling autostart for {}", path_str);
+            let _ = Command::new("reg")
+                .args(["add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", app_name, "/t", "REG_SZ", "/d", &path_str, "/f"])
+                .status();
+        } else {
+            log::info!("Windows: Disabling autostart for {}", app_name);
+            let _ = Command::new("reg")
+                .args(["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", app_name, "/f"])
+                .status();
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::io::Write;
+        let exe_path = std::env::current_exe()?;
+        let path_str = exe_path.to_string_lossy();
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        let autostart_dir = std::path::PathBuf::from(home).join(".config/autostart");
+        let desktop_file = autostart_dir.join("folded-cloud.desktop");
+
+        if enabled {
+            log::info!("Linux: Enabling autostart via .desktop file");
+            let _ = std::fs::create_dir_all(&autostart_dir);
+            let content = format!(
+                "[Desktop Entry]\nType=Application\nName=Folded Cloud\nExec={}\nIcon=folded-cloud\nComment=Telegram Cloud Client\nTerminal=false\n",
+                path_str
+            );
+            if let Ok(mut file) = std::fs::File::create(desktop_file) {
+                let _ = file.write_all(content.as_bytes());
+            }
+        } else {
+            log::info!("Linux: Disabling autostart");
+            let _ = std::fs::remove_file(desktop_file);
+        }
     }
 
     Ok(())

@@ -19,6 +19,20 @@ impl MetadataCache {
         Ok(id)
     }
 
+    pub async fn get_or_create_folder(&self, name: String, parent_id: Option<String>, account_id: Option<String>) -> Result<String> {
+        let existing: Option<(String,)> = sqlx::query_as("SELECT id FROM folders WHERE name = ? AND parent_id IS ? AND account_id IS ?")
+            .bind(&name)
+            .bind(&parent_id)
+            .bind(&account_id)
+            .fetch_optional(&self.pool).await?;
+
+        if let Some((id,)) = existing {
+            return Ok(id);
+        }
+
+        self.create_folder(name, parent_id, account_id).await
+    }
+
     pub async fn folder_exists(&self, folder_id: &str) -> Result<bool> {
         let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM folders WHERE id = ?")
             .bind(folder_id)

@@ -1,5 +1,5 @@
-import React from 'react';
-import { RefreshCw, Search, X, Folder, ChevronRight, Upload, FolderUp, FolderPlus, Star } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { RefreshCw, Search, X, Folder, ChevronRight, Upload, FolderUp, FolderPlus, Star, Filter, ArrowUpDown, Check } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 interface FileTopbarProps {
@@ -14,6 +14,10 @@ interface FileTopbarProps {
   onUploadFile: () => void;
   onUploadFolder: () => void;
   category?: string;
+  sortField: 'name' | 'date' | 'size';
+  sortDirection: 'asc' | 'desc';
+  onSortFieldChange: (field: 'name' | 'date' | 'size') => void;
+  onSortDirectionChange: (dir: 'asc' | 'desc') => void;
 }
 
 export const FileTopbar: React.FC<FileTopbarProps> = ({
@@ -27,10 +31,15 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
   onCreateFolder,
   onUploadFile,
   onUploadFolder,
-  category
+  category,
+  sortField,
+  sortDirection,
+  onSortFieldChange,
+  onSortDirectionChange
 }) => {
   const { activeAccountId, accounts } = useAppStore();
   const currentAccount = accounts.find(a => a.id === activeAccountId);
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   // Simple breadcrumb labels
   const getBreadcrumbLabel = (folderId: string | null, idx: number) => {
@@ -44,10 +53,10 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
     return folderId;
   };
 
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to end on path change
-  React.useEffect(() => {
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
         left: scrollRef.current.scrollWidth,
@@ -67,7 +76,7 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
       }));
 
   return (
-    <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800 shrink-0" style={{ backgroundColor: '#0a0a0c' }}>
+    <div className="h-12 flex items-center justify-between px-5 border-b border-border shrink-0 bg-surface">
       <div className="flex items-center gap-4 flex-1 min-w-0">
         <button 
           className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-zinc-800 transition-all text-zinc-500 hover:text-white border border-transparent hover:border-zinc-700/50 shrink-0" 
@@ -117,6 +126,50 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
             </button>
           </div>
         )}
+
+        {/* Sorting Dropdown */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowSortMenu(!showSortMenu)}
+            className={`flex items-center gap-2 px-2 py-1 rounded-md transition-all
+              ${showSortMenu ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'}`}
+          >
+            <Filter size={14} />
+            <span className="text-[10px] font-bold uppercase tracking-tight">Sort</span>
+          </button>
+
+          {showSortMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+              <div className="absolute right-0 top-full mt-2 w-44 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl z-50 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-3 py-1 text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Field</div>
+                {[
+                  { id: 'name', label: 'Name' },
+                  { id: 'date', label: 'Date' },
+                  { id: 'size', label: 'Size' }
+                ].map(f => (
+                  <button 
+                    key={f.id}
+                    onClick={() => { onSortFieldChange(f.id as any); setShowSortMenu(false); }}
+                    className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  >
+                    {f.label}
+                    {sortField === f.id && <Check size={12} className="text-blue-500" />}
+                  </button>
+                ))}
+                <div className="h-px bg-zinc-800 my-1" />
+                <div className="px-3 py-1 text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Direction</div>
+                <button 
+                  onClick={() => { onSortDirectionChange(sortDirection === 'asc' ? 'desc' : 'asc'); setShowSortMenu(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <ArrowUpDown size={12} className={sortDirection === 'desc' ? 'rotate-180' : ''} />
+                  {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="relative">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" />

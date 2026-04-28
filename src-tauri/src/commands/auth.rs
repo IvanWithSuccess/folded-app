@@ -31,6 +31,12 @@ pub async fn auth_poll_qr(state: State<'_, Arc<SessionManager>>) -> Result<AuthR
 }
 
 #[tauri::command]
+pub async fn auth_cancel(state: State<'_, Arc<SessionManager>>) -> Result<(), String> {
+    state.clear_pending_auths().await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn auth_logout(
     state: State<'_, Arc<SessionManager>>, 
     cache_state: State<'_, Arc<MetadataCache>>,
@@ -80,7 +86,7 @@ pub async fn verify_session_health(
     let mut expired = Vec::new();
 
     for account in &accounts {
-        let is_valid = session_state.get_client_by_id(&account.id).await.is_some();
+        let is_valid = session_state.check_session_health(&account.id).await;
         if !is_valid {
             expired.push(account.id.clone());
         }

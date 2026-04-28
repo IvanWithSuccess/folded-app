@@ -122,12 +122,25 @@ fn main() {
 
                 if close_to_tray {
                     // Prevent window from closing, just hide it to the tray
-                    let _ = window.hide();
+                    let window_clone = window.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if window_clone.is_fullscreen().unwrap_or(false) {
+                            let _ = window_clone.set_fullscreen(false);
+                            // Give macOS a moment to animate out of fullscreen
+                            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                        }
+                        let _ = window_clone.hide();
+                    });
                     api.prevent_close();
                 }
             }
         })
         .setup(move |app: &mut tauri::App| {
+            // Force Dark theme for the main window to prevent white title bar in production
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_theme(Some(tauri::Theme::Dark));
+            }
+
             let mirror_manager = Arc::new(MirrorManager::new(
                 app.handle().clone(),
                 Arc::clone(&metadata_cache),
@@ -217,11 +230,16 @@ fn main() {
             let mirror_manager_clone = Arc::clone(&mirror_manager);
 
             let app_handle_for_crawlers = app.handle().clone();
+            let session_manager_clone = Arc::clone(&session_manager);
+            
+            // Load sessions synchronously at startup to prevent race conditions with frontend
+            if let Err(e) = tauri::async_runtime::block_on(async move {
+                session_manager_clone.load_sessions().await
+            }) {
+                log::error!("Failed to load saved sessions: {}", e);
+            }
+
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = session_manager.load_sessions().await {
-                    eprintln!("Failed to load saved sessions: {}", e);
-                }
-                
                 // Start mirroring engine
                 let _ = mirror_manager_clone.start_all().await;
 
@@ -366,7 +384,14 @@ fn main() {
                 if close_to_tray {
                     api.prevent_exit();
                     if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.hide();
+                        let window_clone = window.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if window_clone.is_fullscreen().unwrap_or(false) {
+                                let _ = window_clone.set_fullscreen(false);
+                                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                            }
+                            let _ = window_clone.hide();
+                        });
                     }
                 } else {
                     let mount_path = tauri::async_runtime::block_on(async {

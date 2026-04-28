@@ -32,12 +32,11 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 h-full flex flex-col border-r border-zinc-800 shrink-0 select-none" style={{ backgroundColor: '#09090b' }}>
+    <div className="w-64 h-full flex flex-col border-r border-border shrink-0 select-none bg-background">
       {/* App Header */}
-      <div className="h-14 flex items-center px-4 border-b border-zinc-800 gap-3 bg-[#0a0a0c]">
-        <div className="flex flex-col leading-tight">
-          <span className="text-[12px] font-black text-white tracking-tight uppercase">Folded</span>
-          <span className="text-[8px] font-black uppercase tracking-[0.3em] text-zinc-600">Storage Cluster</span>
+      <div className="h-12 flex items-center px-5 border-b border-border gap-3 bg-surface shrink-0">
+        <div className="flex flex-col">
+          <span className="text-[12px] font-black text-foreground tracking-tight uppercase">Folded Cloud</span>
         </div>
       </div>
 
@@ -46,7 +45,7 @@ export const Sidebar: React.FC = () => {
         
         {/* Account Drives */}
         <div className="space-y-1.5">
-          <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-zinc-700">Storage Nodes</h3>
+          <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">Storage Nodes</h3>
           
           {accounts.map(account => {
             const isExpanded = expandedAccounts.has(account.id);
@@ -101,7 +100,7 @@ export const Sidebar: React.FC = () => {
 
         {/* Global Tools */}
         <div className="pt-6 border-t border-zinc-800/50 space-y-1">
-          <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-zinc-700">System Utilities</h3>
+          <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">System Utilities</h3>
           <div 
             className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[10px] font-black uppercase tracking-widest transition-all
               ${activeView === 'MIRRORS' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300'}`}
@@ -130,7 +129,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Footer Info */}
-      <div className="p-5 border-t border-zinc-800 bg-[#0a0a0c] space-y-4">
+      <div className="p-5 border-t border-border bg-surface space-y-4">
         <div className="flex items-center justify-between">
            <div className="flex flex-col">
               <span className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.2em]">Network Link</span>
@@ -147,7 +146,7 @@ export const Sidebar: React.FC = () => {
         {isMirrorSyncing && (
           <div className="flex items-center justify-between pt-1 border-t border-zinc-800/30">
              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.2em]">Mirroring</span>
+                <span className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em]">Mirroring</span>
                 <span className="text-[10px] font-black tracking-widest uppercase text-blue-400">
                   Active
                 </span>

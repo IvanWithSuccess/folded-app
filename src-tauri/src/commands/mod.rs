@@ -17,6 +17,7 @@ macro_rules! generate_handler {
             $crate::commands::auth::auth_verify_password,
             $crate::commands::auth::auth_request_qr,
             $crate::commands::auth::auth_poll_qr,
+            $crate::commands::auth::auth_cancel,
             $crate::commands::auth::auth_logout,
             $crate::commands::auth::get_accounts,
             $crate::commands::auth::verify_session_health,

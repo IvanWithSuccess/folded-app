@@ -44,19 +44,44 @@ impl MirrorManager {
 
     pub async fn stop_all_for_account(&self, account_id: &str) -> Result<()> {
         let rules = self.cache.get_mirror_rules().await?;
-        
-        let mut tokens = self.cancellation_tokens.lock().await;
-        let mut watchers = self.watchers.lock().unwrap();
+        let target_rules: Vec<MirrorRule> = rules.into_iter()
+            .filter(|r| r.account_id == account_id)
+            .collect();
 
-        for rule in rules {
-            if rule.account_id == account_id {
+        if target_rules.is_empty() {
+            return Ok(());
+        }
+
+        // 1. Cancel tokens (Tokio Mutex, Send-safe)
+        {
+            let mut tokens = self.cancellation_tokens.lock().await;
+            for rule in &target_rules {
                 if let Some(token) = tokens.remove(&rule.id) {
                     token.cancel();
                 }
-                watchers.remove(&rule.id);
-                log::info!("MIRROR [STOP]: Account {} -> rule {}", account_id, rule.id);
             }
         }
+
+        // 2. Remove watchers (Std Mutex, NOT Send-safe, must be dropped before any await)
+        {
+            let mut watchers = self.watchers.lock().unwrap();
+            for rule in &target_rules {
+                watchers.remove(&rule.id);
+            }
+        } // MutexGuard is dropped here
+
+        // 3. Cleanup statuses (Tokio Mutex, Send-safe)
+        {
+            let mut statuses = self.statuses.lock().await;
+            for rule in &target_rules {
+                statuses.remove(&rule.id);
+            }
+        }
+
+        for rule in target_rules {
+            log::info!("MIRROR [STOP]: Account {} -> rule {}", account_id, rule.id);
+        }
+        
         Ok(())
     }
 
@@ -135,13 +160,8 @@ impl MirrorManager {
              let mut current_id: Option<String> = None;
              let base_parts: Vec<&str> = remote_folder_name.split('/').filter(|s| !s.is_empty()).collect();
              for part in base_parts {
-                 let folders = cache.get_folders_in(current_id.clone(), Some(account_id.to_string())).await?;
-                 if let Some(f) = folders.into_iter().find(|f| f.name == part) {
-                     current_id = Some(f.id);
-                 } else {
-                     let new_id = cache.create_folder(part.to_string(), current_id.clone(), Some(account_id.to_string())).await?;
-                     current_id = Some(new_id);
-                 }
+                 let new_id = cache.get_or_create_folder(part.to_string(), current_id.clone(), Some(account_id.to_string())).await?;
+                 current_id = Some(new_id);
              }
              resolved_rule.remote_folder_id = current_id;
              let _ = cache.upsert_mirror_rule(resolved_rule.clone()).await;
@@ -370,6 +390,11 @@ impl MirrorManager {
                 }
             }
             log::info!("MIRROR [STOP]: Watcher {} terminated", rule_id);
+            // Cleanup status on natural termination
+            {
+                let mut statuses = manager_clone.statuses.lock().await;
+                statuses.remove(&rule_id);
+            }
         });
 
         Ok(())
@@ -633,13 +658,8 @@ async fn sync_file_to_remote(
     // 1. Handle remote_base
     let base_parts: Vec<&str> = remote_base.split('/').filter(|s| !s.is_empty()).collect();
     for part in base_parts {
-        let folders = cache.get_folders_in(current_parent_id.clone(), Some(account_id.to_string())).await?;
-        if let Some(f) = folders.into_iter().find(|f| f.name == part) {
-            current_parent_id = Some(f.id);
-        } else {
-            let new_id = cache.create_folder(part.to_string(), current_parent_id.clone(), Some(account_id.to_string())).await?;
-            current_parent_id = Some(new_id);
-        }
+        let new_id = cache.get_or_create_folder(part.to_string(), current_parent_id.clone(), Some(account_id.to_string())).await?;
+        current_parent_id = Some(new_id);
     }
     
     if let Some(rid) = &current_parent_id {
@@ -650,13 +670,8 @@ async fn sync_file_to_remote(
     if let Some(parent_rel) = rel_path.parent() {
         for part in parent_rel.components() {
             let part_name = part.as_os_str().to_string_lossy().to_string();
-            let folders = cache.get_folders_in(current_parent_id.clone(), Some(account_id.to_string())).await?;
-            if let Some(f) = folders.into_iter().find(|f| f.name == part_name) {
-                current_parent_id = Some(f.id);
-            } else {
-                let new_id = cache.create_folder(part_name, current_parent_id.clone(), Some(account_id.to_string())).await?;
-                current_parent_id = Some(new_id);
-            }
+            let new_id = cache.get_or_create_folder(part_name, current_parent_id.clone(), Some(account_id.to_string())).await?;
+            current_parent_id = Some(new_id);
         }
     }
 

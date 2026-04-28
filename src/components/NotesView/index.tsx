@@ -24,11 +24,20 @@ export const NotesView: React.FC = () => {
 
   // Sync selected note with the list when notes update
   useEffect(() => {
-    if (selectedNote) {
-      const updated = notes.find(n => n.id === selectedNote.id);
-      if (updated && updated !== selectedNote) {
-        setSelectedNote(updated);
+    try {
+      if (selectedNote) {
+        const updated = notes.find(n => n.id === selectedNote.id);
+        if (updated) {
+          if (updated !== selectedNote) {
+            setSelectedNote(updated);
+          }
+        } else {
+          // Note is no longer in the list (e.g. deleted externally or by us)
+          setSelectedNote(null);
+        }
       }
+    } catch (e) {
+      console.error('Error in NotesView effect:', e);
     }
   }, [notes, selectedNote]);
 
@@ -55,8 +64,15 @@ export const NotesView: React.FC = () => {
   };
 
   const handleDeleteNote = async (note: NoteInfo) => {
-    if (selectedNote?.id === note.id) setSelectedNote(null);
-    await handleDelete(note);
+    if (!note || !note.id) return;
+    try {
+      if (selectedNote?.id === note.id) {
+        setSelectedNote(null);
+      }
+      await handleDelete(note);
+    } catch (e) {
+      console.error('Delete note handler error:', e);
+    }
   };
 
   return (
@@ -81,7 +97,10 @@ export const NotesView: React.FC = () => {
             isCreating={isCreating}
             onClose={() => { setSelectedNote(null); setIsCreating(false); }}
             onSave={(id, content) => selectedNote ? handleUpdateNote(selectedNote, content) : handleCreateNote(content)}
-            onDelete={selectedNote ? () => handleDeleteNote(selectedNote) : () => {}}
+            onDelete={async (id) => {
+              const noteToDelete = notes.find(n => n.id === id);
+              if (noteToDelete) await handleDeleteNote(noteToDelete);
+            }}
             onUpdate={handleUpdateNote}
             onAttach={async (fileId) => { if (selectedNote) await handleAttach(selectedNote.id, fileId); }}
             onDetach={async (fileId) => { if (selectedNote) await handleDetach(selectedNote.id, fileId); }}
