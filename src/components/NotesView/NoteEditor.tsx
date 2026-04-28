@@ -111,7 +111,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const updatedIds = (note.attachment_ids ? note.attachment_ids + ',' : '') + fileId;
       fetchAttachmentInfo(updatedIds);
     } catch (e) {
-      alert('Failed to attach file: ' + e);
+      console.error('Failed to attach file:', e);
+      alert('Failed to attach file: ' + ((e as Error).message || String(e)));
     }
   };
 
@@ -127,7 +128,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const updatedIds = (note.attachment_ids || '').split(',').filter(id => id !== fileId).join(',');
       fetchAttachmentInfo(updatedIds);
     } catch (e) {
-      alert('Failed to detach file: ' + e);
+      console.error('Failed to detach file:', e);
+      alert('Failed to detach file: ' + ((e as Error).message || String(e)));
     }
   };
 
@@ -136,7 +138,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const path = await invoke<string>('cluster_download_to_tmp', { fileId });
       await invoke('open_system_file', { path });
     } catch (e) {
-      alert('Failed to open file: ' + e);
+      console.error('Failed to open file:', e);
+      alert('Failed to open file: ' + ((e as Error).message || String(e)));
     }
   };
 

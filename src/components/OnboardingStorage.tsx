@@ -53,7 +53,8 @@ export const OnboardingStorage: React.FC<OnboardingStorageProps> = ({ accountId,
       setSelectedChannelId(channelId);
       setHubType('channel');
     } catch (e) {
-      alert("Failed to create channel. You might have reached Telegram's channel limit.");
+      console.error('Failed to create channel:', e);
+      alert("Failed to create channel. You might have reached Telegram's channel limit: " + ((e as Error).message || String(e)));
     } finally {
       setCreating(false);
     }

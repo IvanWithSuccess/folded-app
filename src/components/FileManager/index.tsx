@@ -185,7 +185,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
           await invoke('open_system_file', { path: url });
         } catch (e) {
           console.error('Failed to open browser URL:', e);
-          alert('Failed to open file in browser: ' + e);
+          alert('Failed to open file in browser: ' + ((e as Error).message || String(e)));
         }
       }
     } else {
@@ -195,7 +195,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         await invoke('open_system_file', { path: tmpPath });
       } catch (e) {
         console.error('Open failed:', e);
-        alert('Failed to open file: ' + e);
+        alert('Failed to open file: ' + ((e as Error).message || String(e)));
       }
     }
   };

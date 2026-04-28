@@ -51,9 +51,10 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
     if (!window.confirm('Disconnect this account from the cloud?')) return;
     try {
       await invoke('auth_logout', { accountId: id });
-      fetchAccounts();
+      await fetchAccounts();
     } catch (e) {
       console.error('Logout failed:', e);
+      alert('Logout failed: ' + (e as Error).message || String(e));
     }
   };
 

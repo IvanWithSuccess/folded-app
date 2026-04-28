@@ -87,7 +87,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
       await invoke('auth_request_code', { phone });
       setStep('code');
     } catch (e: any) {
-      setError(e.toString());
+      console.error('Request code failed:', e);
+      setError(e?.message || e.toString());
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
         setError(response.Error);
       }
     } catch (e: any) {
-      setError(e.toString());
+      console.error('Verify code failed:', e);
+      setError(e?.message || e.toString());
     } finally {
       setLoading(false);
     }
@@ -125,7 +127,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
         setStep('qr');
       }
     } catch (e: any) {
-      setError(e.toString());
+      console.error('Request QR failed:', e);
+      setError(e?.message || e.toString());
     } finally {
       setLoading(false);
     }
@@ -143,7 +146,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
         setError(response.Error);
       }
     } catch (e: any) {
-      setError(e.toString());
+      console.error('Verify password failed:', e);
+      setError(e?.message || e.toString());
     } finally {
       setLoading(false);
     }
