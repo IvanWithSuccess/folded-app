@@ -1,13 +1,58 @@
-```
+```gitignore
+# Dependencies
+node_modules/
+
+# Build outputs
 dist/
-**/*.pyc
-__pycache__/
-*.log
-*.tmp
+build/
+.next/
+.nuxt/
+public/dist/
+out/
+
+# Environment variables
 .env
 .env.local
-*.env.*
+.env.*
+!.env.example
+
+# IDE specific
 .vscode/
 .idea/
-node_modules/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage reports
+coverage/
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+```
+
+Wait, I need to reconsider this. Looking at the modified files, they are all TypeScript/React source files (.tsx, .ts) which are not build artifacts. Let me check again.
+
+The modified files are all source code files:
+- src/components/AccountManager.tsx
+- src/components/FileManager/ShareModal.tsx
+- src/components/FileManager/index.tsx
+- src/components/LoginModal.tsx
+- src/components/NotesView/NoteEditor.tsx
+- src/components/OnboardingStorage.tsx
+- src/components/SettingsView.tsx
+- src/hooks/useFileActions.ts
+- src/hooks/useNotes.ts
+
+Since only source code files were modified and no build artifacts, dependencies, or temporary files were mentioned in the changes, the output should be empty.
+
+```gitignore
+
 ```

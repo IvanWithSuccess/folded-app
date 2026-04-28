@@ -59,6 +59,7 @@ export function useNotes() {
       await fetchNotes();
     } catch (e) {
       console.error('Notes sync failed:', e);
+      alert('Notes sync failed: ' + (e as Error).message || String(e));
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +76,8 @@ export function useNotes() {
       });
       await fetchNotes();
     } catch (e) {
-      alert('Failed to update note: ' + e);
+      console.error('Failed to update note:', e);
+      alert('Failed to update note: ' + (e as Error).message || String(e));
     }
   }, [fetchNotes]);
 
@@ -90,7 +92,8 @@ export function useNotes() {
       });
       await fetchNotes();
     } catch (e) {
-      alert('Failed to delete note: ' + e);
+      console.error('Failed to delete note:', e);
+      alert('Failed to delete note: ' + (e as Error).message || String(e));
     }
   }, [fetchNotes]);
 
@@ -103,7 +106,8 @@ export function useNotes() {
       });
       await fetchNotes();
     } catch (e) {
-      alert('Failed to create note: ' + e);
+      console.error('Failed to create note:', e);
+      alert('Failed to create note: ' + (e as Error).message || String(e));
     }
   }, [activeAccountId, fetchNotes]);
 

@@ -135,7 +135,7 @@ export const SettingsView: React.FC = () => {
             window.location.reload();
         } catch (e) {
             console.error('Failed to wipe database:', e);
-            alert(`Failed to wipe database: ${e}`);
+            alert(`Failed to wipe database: ${(e as Error).message || String(e)}`);
         }
     }
   };
@@ -156,7 +156,7 @@ export const SettingsView: React.FC = () => {
       await invoke('clear_file_cache');
       await loadCacheStats();
     } catch (e) {
-      alert(`Failed to clear cache: ${e}`);
+      alert(`Failed to clear cache: ${(e as Error).message || String(e)}`);
     } finally {
       setClearingCache(false);
     }
