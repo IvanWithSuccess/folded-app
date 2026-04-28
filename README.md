@@ -1,38 +1,35 @@
 # 📂 Folded Cloud
 
-**Folded Cloud** is a powerful, multi-account Telegram-based cloud storage application. It turns your Telegram accounts into a unified, unlimited, and high-speed personal cloud storage system with a native OS integration.
+**Folded Cloud** is a professional, high-performance Telegram-based cloud storage application. It transforms your Telegram accounts into a unified, unlimited, and high-speed personal storage cluster with deep OS integration.
 
 ![Folded Logo](Logo.png)
 
 ## ✨ Key Features
 
-- **🚀 Unlimited Storage**: Utilize multiple Telegram accounts as a single, expandable storage cluster.
-- **📦 Smart Chunking**: Automatically splits large files (up to any size) into binary chunks (1.9GB or 3.9GB for Premium) to bypass Telegram's file size limits.
-- **📡 Native Streaming (WebDAV)**: Stream 4K movies and large files directly from Telegram servers without full downloading.
-- **🖥️ OS Integration**: Mount your Folded Cloud as a real network drive on **macOS** and **Windows** (Finder/Explorer).
-- **🔄 Background Sync**: Silent background engine (Crawler) that automatically indexes new files uploaded to "Saved Messages".
-- **📝 Integrated Notes**: A simple and fast note-taking system with file attachments, synchronized via Telegram.
-- **🛡️ Privacy Focused**: All sessions and metadata are stored locally on your machine in an encrypted-ready SQLite database.
-- **🎨 Premium UI/UX**: Modern, responsive interface built with React and Tailwind CSS, providing a seamless file management experience.
+- **🚀 Unified Storage Cluster**: Seamlessly combine multiple Telegram accounts into a single, massive storage pool.
+- **📦 Intelligent Chunking**: Automatically fragments large files (up to any size) into optimized chunks (1.9GB or 3.9GB for Premium) to bypass platform limits.
+- **📡 Instant Streaming (WebDAV)**: Stream 4K media and access massive files directly from Telegram servers via a virtual filesystem—no full download required.
+- **🖥️ Native OS Integration**: Mount your Folded Cloud as a real network drive on **macOS** and **Windows** for direct access via Finder or Explorer.
+- **🔄 Industrial Background Engine**: A high-efficiency Rust-based crawler that monitors and indexes "Saved Messages" in real-time.
+- **📝 Secure Notes**: Integrated note-taking system with cloud-synced attachments, protected by Telegram's infrastructure.
+- **🛡️ Privacy First**: All sessions, keys, and metadata are stored exclusively on your local machine in an encrypted-ready SQLite database.
+- **🎨 Industrial Aesthetics**: A high-end, dark-mode "Industrial Design" interface built for power users.
 
 ## 🛠️ Technology Stack
 
-- **Backend**: [Rust](https://www.rust-lang.org/) with [Tauri](https://tauri.app/)
-- **Telegram Client**: [Grammers](https://github.com/Lonami/grammers) (Asynchronous Telegram API)
-- **Database**: [SQLite](https://www.sqlite.org/) with [SQLx](https://github.com/launchbadge/sqlx)
-- **Frontend**: [React](https://reactjs.org/), [Vite](https://vitejs.dev/), [Tailwind CSS](https://tailwindcss.com/)
-- **Virtual Drive**: WebDAV protocol implementation for native OS mounting.
+- **Core**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://tauri.app/)
+- **Telegram Engine**: [Grammers](https://github.com/Lonami/grammers) (Asynchronous MTProto implementation)
+- **Data Persistence**: [SQLite](https://www.sqlite.org/) with [SQLx](https://github.com/launchbadge/sqlx)
+- **Frontend**: [React 18](https://reactjs.org/), [Vite](https://vitejs.dev/), [Tailwind CSS 4](https://tailwindcss.com/)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Virtual Drive**: Custom WebDAV bridge for low-latency filesystem emulation.
 
 ## 🏗️ Architecture
 
-The project is designed with a modular architecture for high performance and maintainability:
-
-- **Metadata Cache**: A high-performance SQLite-backed cache that manages virtual file systems and Telegram message mappings.
-- **Cluster Orchestrator**: Handles the logic of splitting, distributing, and reassembling file chunks across multiple accounts.
-- **Session Manager**: Securely manages multiple Telegram sessions and authentication states.
-- **WebDAV Bridge**: Translates virtual file system calls into Telegram API requests for real-time streaming.
-
-For a detailed breakdown of the codebase, see [**docs/structure.md**](src-tauri/docs/structure.md).
+- **Metadata Engine**: A high-performance local indexer that maps virtual files to Telegram message nodes.
+- **Cluster Orchestrator**: Manages multi-account distribution, chunking logic, and reassembly.
+- **Session Manager**: Handles secure authentication, including 2FA and QR-based logins.
+- **WebDAV Bridge**: Translates OS filesystem calls into asynchronous Telegram API requests for on-demand data retrieval.
 
 ## 🚀 Getting Started
 
@@ -40,7 +37,7 @@ For a detailed breakdown of the codebase, see [**docs/structure.md**](src-tauri/
 
 - [Rust](https://www.rust-lang.org/tools/install) (latest stable)
 - [Node.js](https://nodejs.org/) (v18+)
-- [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites)
+- [Tauri CLI](https://tauri.app/v2/guides/getting-started/prerequisites/) (`cargo install tauri-cli`)
 
 ### Installation
 
@@ -65,9 +62,12 @@ For a detailed breakdown of the codebase, see [**docs/structure.md**](src-tauri/
    npm run tauri build
    ```
 
-## 🔒 Security
+## 🔒 Security & Privacy
 
-Folded Cloud stores your Telegram session files locally in `~/.folded/sessions/`. Metadata about your files is stored in `~/.folded/metadata_db.sqlite`. Your data remains your data—the application does not use any central servers.
+Folded Cloud is built on the principle of local-first data.
+- **No External Servers**: The app communicates directly with Telegram servers.
+- **Local Credentials**: Session files (`~/.folded/sessions/`) and your file index (`~/.folded/metadata_db.sqlite`) never leave your device.
+- **Open Protocol**: Uses standard WebDAV for local OS mounting.
 
 ## 📄 License
 
@@ -75,4 +75,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Built with ❤️ using Rust and Tauri.
+Built with 🦀 and ⚛️ for the open web.
