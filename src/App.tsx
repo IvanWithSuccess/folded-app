@@ -46,39 +46,46 @@ function App() {
 
   // Listen for backend progress events
   useEffect(() => {
-    const unsubUpload = (async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      return await listen<{ file_id: string; file_name: string; processed_bytes: number; total_bytes: number }>('upload-progress', (event) => {
-        const progress = Math.round((event.payload.processed_bytes * 100) / event.payload.total_bytes);
-        setActiveTask(event.payload.file_id, progress);
-        
-        if (taskTimeout.current) clearTimeout(taskTimeout.current);
-        // taskTimeout.current = setTimeout(() => setActiveTask(null), 3000);
-      });
-    })();
+    let unlistenFuncs: (() => void)[] = [];
+    let isMounted = true;
 
-    const unsubDownload = (async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      return await listen<{ file_name: string; processed_bytes: number; total_bytes: number }>('download-progress', (event) => {
-        const progress = Math.round((event.payload.processed_bytes * 100) / event.payload.total_bytes);
-        setActiveTask(`Downloading: ${event.payload.file_name}`, progress);
+    const setupListeners = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
         
-        if (taskTimeout.current) clearTimeout(taskTimeout.current);
-        taskTimeout.current = setTimeout(() => setActiveTask(null), 3000);
-      });
-    })();
+        const uUpload = await listen<{ file_id: string; file_name: string; processed_bytes: number; total_bytes: number }>('upload-progress', (event) => {
+          if (!isMounted) return;
+          const progress = Math.round((event.payload.processed_bytes * 100) / event.payload.total_bytes);
+          setActiveTask(event.payload.file_id, progress);
+          if (taskTimeout.current) clearTimeout(taskTimeout.current);
+        });
+        unlistenFuncs.push(uUpload);
 
-    const unsubMirror = (async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      return await listen<{ id: string; status: string }>('mirror-status-update', (event) => {
-        useAppStore.getState().setMirrorStatus(event.payload.id, event.payload.status);
-      });
-    })();
+        const uDownload = await listen<{ file_name: string; processed_bytes: number; total_bytes: number }>('download-progress', (event) => {
+          if (!isMounted) return;
+          const progress = Math.round((event.payload.processed_bytes * 100) / event.payload.total_bytes);
+          setActiveTask(`Downloading: ${event.payload.file_name}`, progress);
+          if (taskTimeout.current) clearTimeout(taskTimeout.current);
+          taskTimeout.current = setTimeout(() => setActiveTask(null), 3000);
+        });
+        unlistenFuncs.push(uDownload);
+
+        const uMirror = await listen<{ id: string; status: string }>('mirror-status-update', (event) => {
+          if (!isMounted) return;
+          useAppStore.getState().setMirrorStatus(event.payload.id, event.payload.status);
+        });
+        unlistenFuncs.push(uMirror);
+
+      } catch (e) {
+        console.error('Failed to setup global listeners:', e);
+      }
+    };
+
+    setupListeners();
 
     return () => {
-      unsubUpload.then(u => u());
-      unsubDownload.then(u => u());
-      unsubMirror.then(u => u());
+      isMounted = false;
+      unlistenFuncs.forEach(fn => fn());
     };
   }, [setActiveTask]);
 

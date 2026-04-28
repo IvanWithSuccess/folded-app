@@ -12,6 +12,9 @@ export default defineConfig(async () => ({
     port: 5173,
     strictPort: true,
     host: true,
+    hmr: {
+      overlay: false,  // Disable error overlay - errors go to DevTools console instead
+    },
     watch: {
       ignored: ["**/src-tauri/**"],
     },

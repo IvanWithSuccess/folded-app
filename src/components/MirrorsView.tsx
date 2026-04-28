@@ -29,14 +29,32 @@ export const MirrorsView: React.FC = () => {
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   
   useEffect(() => {
-    const unlisten = listen<{id: string, status: string}>('mirror-status-update', (event) => {
-      setRules(prev => prev.map(r => 
-        r.id === event.payload.id ? { ...r, status: event.payload.status as any } : r
-      ));
-    });
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    const setupListener = async () => {
+      try {
+        const unlisten = await listen<{id: string, status: string}>('mirror-status-update', (event) => {
+          if (!isMounted) return;
+          setRules(prev => prev.map(r => 
+            r.id === event.payload.id ? { ...r, status: event.payload.status as any } : r
+          ));
+        });
+        if (isMounted) {
+          unlistenFn = unlisten;
+        } else {
+          unlisten();
+        }
+      } catch (e) {
+        console.error('Failed to setup mirror listener:', e);
+      }
+    };
+
+    setupListener();
     
     return () => {
-      unlisten.then(f => f());
+      isMounted = false;
+      if (unlistenFn) unlistenFn();
     };
   }, []);
   

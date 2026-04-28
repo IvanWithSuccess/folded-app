@@ -61,7 +61,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (note) {
       setContent(note.content);
       setIsModified(false);
-      fetchAttachmentInfo(note.attachment_ids);
+      fetchAttachmentInfo(note.attachment_ids).catch(err => console.error('Attachment fetch error:', err));
     } else {
       setContent('');
       setIsModified(true);
@@ -170,7 +170,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <div className="flex items-center gap-3">
               {!isReadOnly && (
                 <button 
-                  onClick={handleSave}
+                  onClick={() => handleSave().catch(e => console.error('Save error:', e))}
                   disabled={!isModified && !isNew}
                   className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all
                     ${isModified || isNew ? 'bg-zinc-100 text-black hover:bg-white shadow-lg active:scale-95' : 'bg-zinc-900 text-zinc-700 cursor-default'}`}
@@ -189,7 +189,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
              {!isNew && (
                <button 
-                 onClick={() => onDelete(note!.id)}
+                 onClick={() => { Promise.resolve(onDelete(note!.id)).catch(e => console.error('Delete note error:', e)); }}
                  className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-95"
                  title="Delete Note"
                >
@@ -269,7 +269,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                            <button 
                              onClick={(e) => {
                                e.stopPropagation();
-                               handleDetachFile(file.id);
+                               handleDetachFile(file.id).catch(err => console.error('Detach error:', err));
                              }}
                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 hover:text-red-500 text-zinc-700 rounded-md transition-all"
                            >

@@ -94,6 +94,20 @@ fn main() {
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Suppress the Tauri dev error overlay for unhandled promise rejections.
+        // The overlay is controlled at WebView level; this init script runs before
+        // any page JS and prevents the yellow "Promise Rejection" screen.
+        .append_invoke_initialization_script(r#"
+            (function() {
+                window.addEventListener('unhandledrejection', function(event) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    if (event.reason !== undefined && event.reason !== null) {
+                        console.error('[Unhandled Promise Rejection]', event.reason);
+                    }
+                }, true);
+            })();
+        "#)
         .manage(Arc::clone(&session_manager))
         .manage(Arc::clone(&webdav_bridge))
         .manage(Arc::clone(&cluster_orchestrator))

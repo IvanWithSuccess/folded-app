@@ -27,19 +27,28 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [isMounted, setIsMounted] = useState(true);
+
+  useEffect(() => {
+    return () => setIsMounted(false);
+  }, []);
+
   const fetchAccounts = async () => {
+    if (!isMounted) return;
     setLoading(true);
     try {
       const accs = await invoke<Account[]>('get_accounts');
-      setAccounts(accs);
-      setGlobalAccounts(accs as any); // Sync with Sidebar and other global components
-      if (accs.length === 0 && onAccountsEmpty) {
-        onAccountsEmpty();
+      if (isMounted) {
+        setAccounts(accs);
+        setGlobalAccounts(accs as any); 
+        if (accs.length === 0 && onAccountsEmpty) {
+          onAccountsEmpty();
+        }
       }
     } catch (e) {
       console.error('Failed to fetch accounts:', e);
     } finally {
-      setLoading(false);
+      if (isMounted) setLoading(false);
     }
   };
 
@@ -50,16 +59,12 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
   const handleLogout = async (id: string) => {
     if (!window.confirm('Disconnect this account from the cloud?')) return;
     try {
-      // 1. Backend Logout
       await invoke('auth_logout', { accountId: id });
-      
-      // 2. Atomic Frontend Cleanup
       logoutGlobal(id);
-      
-      // 3. Refresh list (which will trigger onAccountsEmpty if needed)
-      fetchAccounts();
+      await fetchAccounts();
     } catch (e) {
       console.error('Logout failed:', e);
+      alert('Logout failed: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
