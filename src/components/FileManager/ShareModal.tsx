@@ -43,7 +43,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ file, onClose }) => {
       });
       onClose();
     } catch (e) {
-      alert('Share failed: ' + e);
+      alert('Share failed: ' + ((e as Error).message || String(e)));
     } finally {
       setSharing(null);
     }

@@ -114,7 +114,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
       setInspectItem(item as SelectableItem);
     } catch (e) {
       console.error('Reveal failed:', e);
-      alert('Failed to reveal file location');
+      alert('Failed to reveal file location: ' + ((e as Error).message || String(e)));
     }
   };
 
@@ -208,7 +208,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
           await invoke('open_system_file', { path: url });
         } catch (e) {
           console.error('Failed to open browser URL:', e);
-          alert('Failed to open file in browser: ' + e);
+          alert('Failed to open file in browser: ' + ((e as Error).message || String(e)));
         }
       }
     } else {
@@ -218,13 +218,13 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
         await invoke('open_system_file', { path: tmpPath });
       } catch (e) {
         console.error('Open failed:', e);
-        alert('Failed to open file: ' + e);
+        alert('Failed to open file: ' + ((e as Error).message || String(e)));
       }
     }
   };
 
   const handleItemDoubleClick = async (item: SelectableItem, colIdx: number) => {
-    handleOpenFile(item, colIdx);
+    await handleOpenFile(item, colIdx);
   };
 
 
@@ -239,7 +239,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     }
   };
 
-  const handleAction = (actionId: string) => {
+  const handleAction = async (actionId: string) => {
     const item = menu?.item;
     const isSelected = item && explorer.selectedItems.has(item.id);
     const selection = isSelected && explorer.selectedItems.size > 1
@@ -250,10 +250,10 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
 
     switch (actionId) {
       case 'open_browser':
-        if (item) handleOpenFile(item, menu!.colIdx, 'browser');
+        if (item) await handleOpenFile(item, menu!.colIdx, 'browser');
         break;
       case 'open_system':
-        if (item) handleOpenFile(item, menu!.colIdx, 'system');
+        if (item) await handleOpenFile(item, menu!.colIdx, 'system');
         break;
       case 'newFolder':
         setModalInput('');

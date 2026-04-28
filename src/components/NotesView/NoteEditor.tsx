@@ -121,7 +121,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const path = await invoke<string>('cluster_download_to_tmp', { fileId });
       await invoke('open_system_file', { path });
     } catch (e) {
-      alert('Failed to open file: ' + e);
+      alert('Failed to open file: ' + ((e as Error).message || String(e)));
     }
   };
 

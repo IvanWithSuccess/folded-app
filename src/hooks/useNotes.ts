@@ -75,7 +75,7 @@ export function useNotes() {
       });
       await fetchNotes();
     } catch (e) {
-      alert('Failed to update note: ' + e);
+      alert('Failed to update note: ' + ((e as Error).message || String(e)));
     }
   }, [fetchNotes]);
 
@@ -89,9 +89,9 @@ export function useNotes() {
         noteId: note.id
       });
       await fetchNotes();
-    } catch (e: any) {
+    } catch (e) {
       console.error('Delete failed:', e);
-      alert('Failed to delete note: ' + (e?.message || e || 'Unknown error'));
+      alert('Failed to delete note: ' + ((e as Error).message || String(e)));
     }
   }, [fetchNotes]);
 
@@ -104,9 +104,9 @@ export function useNotes() {
       });
       await fetchNotes();
       return newNote;
-    } catch (e: any) {
+    } catch (e) {
       console.error('Create failed:', e);
-      alert('Failed to create note: ' + (e?.message || e || 'Unknown error'));
+      alert('Failed to create note: ' + ((e as Error).message || String(e)));
       return null;
     }
   }, [activeAccountId, fetchNotes]);
@@ -121,9 +121,9 @@ export function useNotes() {
         fileId
       });
       await fetchNotes();
-    } catch (e: any) {
+    } catch (e) {
       console.error('Attach failed:', e);
-      alert('Failed to attach: ' + (e?.message || e || 'Unknown error'));
+      alert('Failed to attach: ' + ((e as Error).message || String(e)));
     }
   }, [notes, fetchNotes]);
 
@@ -137,9 +137,9 @@ export function useNotes() {
         fileId
       });
       await fetchNotes();
-    } catch (e: any) {
+    } catch (e) {
       console.error('Detach failed:', e);
-      alert('Failed to detach: ' + (e?.message || e || 'Unknown error'));
+      alert('Failed to detach: ' + ((e as Error).message || String(e)));
     }
   }, [notes, fetchNotes]);
 

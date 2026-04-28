@@ -64,7 +64,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
       await fetchAccounts();
     } catch (e) {
       console.error('Logout failed:', e);
-      alert('Logout failed: ' + (e instanceof Error ? e.message : String(e)));
+      alert('Logout failed: ' + ((e as Error).message || String(e)));
     }
   };
 

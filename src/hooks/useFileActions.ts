@@ -41,7 +41,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Failed to create folder: ' + e);
+      alert('Failed to create folder: ' + ((e as Error).message || String(e)));
     }
   }, [activeDriveId, path, refresh]);
 
@@ -55,7 +55,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Rename failed: ' + e);
+      alert('Rename failed: ' + ((e as Error).message || String(e)));
     }
   }, [path, refresh]);
 
@@ -72,7 +72,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Delete failed: ' + e);
+      alert('Delete failed: ' + ((e as Error).message || String(e)));
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +94,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         destPath
       });
     } catch (e) {
-      alert('Download failed: ' + e);
+      alert('Download failed: ' + ((e as Error).message || String(e)));
     }
   }, []);
 
@@ -119,7 +119,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert(`${mode === 'move' ? 'Move' : 'Copy'} failed: ` + e);
+      alert(`${mode === 'move' ? 'Move' : 'Copy'} failed: ` + ((e as Error).message || String(e)));
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +141,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         targetPath
       });
     } catch (e) {
-      alert('Download failed: ' + e);
+      alert('Download failed: ' + ((e as Error).message || String(e)));
     } finally {
       setIsLoading(false);
     }
@@ -179,7 +179,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Upload failed: ' + e);
+      alert('Upload failed: ' + ((e as Error).message || String(e)));
     } finally {
       setIsLoading(false);
     }
@@ -195,7 +195,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Failed to toggle starred: ' + e);
+      alert('Failed to toggle starred: ' + ((e as Error).message || String(e)));
     }
   }, [activeDriveId, path, refresh]);
 
@@ -206,7 +206,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Delete with versions failed: ' + e);
+      alert('Delete with versions failed: ' + ((e as Error).message || String(e)));
     } finally {
       setIsLoading(false);
     }

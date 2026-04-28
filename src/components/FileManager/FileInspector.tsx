@@ -77,7 +77,7 @@ export const FileInspector: React.FC<FileInspectorProps> = ({
       if (onRefresh) onRefresh();
     } catch (e) {
       console.error('Failed to restore version:', e);
-      alert(`Restore failed: ${e}`);
+      alert(`Restore failed: ${((e as Error).message || String(e))}`);
     } finally {
       setActionLoading(null);
     }
@@ -90,7 +90,7 @@ export const FileInspector: React.FC<FileInspectorProps> = ({
       alert(`File downloaded to: ${path}`);
     } catch (e) {
       console.error('Failed to download version:', e);
-      alert(`Download failed: ${e}`);
+      alert(`Download failed: ${((e as Error).message || String(e))}`);
     } finally {
       setActionLoading(null);
     }
@@ -104,7 +104,7 @@ export const FileInspector: React.FC<FileInspectorProps> = ({
       if (onRefresh) onRefresh();
     } catch (e) {
       console.error('Failed to restore item:', e);
-      alert(`Restore failed: ${e}`);
+      alert(`Restore failed: ${((e as Error).message || String(e))}`);
     } finally {
       setActionLoading(null);
     }
