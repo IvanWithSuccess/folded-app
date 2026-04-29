@@ -1,9 +1,9 @@
 use std::process::Command;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 #[cfg(target_os = "macos")]
 use std::fs;
 
-pub fn mount_drive(port: u16, _drive_letter: &str, _custom_path: Option<String>) -> Result<()> {
+pub fn mount_drive(port: u16, drive_letter: &str, _custom_path: Option<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         let url = format!("http://localhost:{}", port);

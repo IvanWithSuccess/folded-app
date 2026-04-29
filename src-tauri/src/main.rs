@@ -400,6 +400,7 @@ fn main() {
                     let _ = crate::os_integration::unmount_drive("Z:", mount_path);
                 }
             }
+            #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => {
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let _ = window.show();
