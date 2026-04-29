@@ -1,8 +1,10 @@
 use std::process::Command;
+#[allow(unused_imports)]
 use anyhow::{Result, anyhow};
 #[cfg(target_os = "macos")]
 use std::fs;
 
+#[allow(unused_variables)]
 pub fn mount_drive(port: u16, drive_letter: &str, _custom_path: Option<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
