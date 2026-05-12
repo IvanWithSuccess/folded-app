@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../store/useAppStore';
 import { useFileExplorer } from '../../hooks/useFileExplorer';
@@ -9,6 +10,7 @@ import { SelectableItem, FileManifest } from '../../types/file';
 // Sub-components
 import { FileTopbar } from './FileTopbar';
 import { FileColumn } from './FileColumn';
+import { ClassicView } from './ClassicView';
 import { FileInspector } from './FileInspector';
 import { FileModals } from './FileModals';
 import { FileContextMenu } from './FileContextMenu';
@@ -30,7 +32,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     setIsSyncing,
     navigationPath,
     pendingRevealId,
-    clearNavigation
+    clearNavigation,
+    viewMode
   } = useAppStore();
   const explorer = useFileExplorer(category);
   const [defaultOpenMode, setDefaultOpenMode] = useState<'system' | 'browser'>('system');
@@ -263,6 +266,27 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     await handleOpenFile(item, colIdx);
   };
 
+  const handleDrop = async (e: React.DragEvent, targetItem: SelectableItem | null, colIdx: number) => {
+    e.preventDefault();
+    const dragData = explorer.dragItem;
+    if (!dragData) return;
+
+    // Determine target folder ID
+    const targetId = targetItem && isFolder(targetItem) ? targetItem.id : explorer.path[colIdx];
+    
+    // Don't drop on itself or its parent (if already there)
+    if (dragData.item.id === targetId) return;
+
+    try {
+      await actions.handlePasteItems([dragData.item], targetId, 'move');
+    } catch (e) {
+      console.error('Drop failed:', getErrorMessage(e));
+    } finally {
+      explorer.setDragItem(null);
+      explorer.setDropTarget(null);
+    }
+  };
+
 
   const handleContextMenu = (e: React.MouseEvent, item: SelectableItem | null, colIdx: number) => {
     e.preventDefault();
@@ -400,24 +424,45 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
               setInspectItem(null);
             }}
           >
-            {sortedColumns.map((col, idx) => (
-              <FileColumn 
-                key={`${idx}-${explorer.path[idx]}`}
-                columnIdx={idx}
-                data={col}
+            {viewMode === 'columns' ? (
+              sortedColumns.slice(0, explorer.path.length).map((col, idx) => (
+                <FileColumn 
+                  key={`${idx}-${explorer.path[idx] || 'loading'}`}
+                  columnIdx={idx}
+                  data={col}
+                  selectedItems={explorer.selectedItems}
+                  path={explorer.path}
+                  pendingMoveItems={new Set(explorer.clipboard?.mode === 'move' ? explorer.clipboard.items.map(i => i.id) : [])}
+                  dropTarget={explorer.dropTarget}
+                  onItemClick={(item, colIdx, e) => handleItemClick(item, colIdx, e)}
+                  onItemDoubleClick={handleItemDoubleClick}
+                  onContextMenu={handleContextMenu}
+                  onDragStart={(e, item) => explorer.setDragItem({ item, columnIdx: idx })}
+                  onDragOver={(e, item) => explorer.setDropTarget(item?.id || explorer.path[idx] || null)}
+                  onDragLeave={() => explorer.setDropTarget(null)}
+                  onDrop={handleDrop}
+                />
+              ))
+            ) : sortedColumns.length > 0 && explorer.path.length > 0 ? (
+              <ClassicView 
+                data={sortedColumns[Math.min(sortedColumns.length, explorer.path.length) - 1]}
+                columnIdx={Math.min(sortedColumns.length, explorer.path.length) - 1}
                 selectedItems={explorer.selectedItems}
-                path={explorer.path}
                 pendingMoveItems={new Set(explorer.clipboard?.mode === 'move' ? explorer.clipboard.items.map(i => i.id) : [])}
                 dropTarget={explorer.dropTarget}
                 onItemClick={(item, colIdx, e) => handleItemClick(item, colIdx, e)}
                 onItemDoubleClick={handleItemDoubleClick}
                 onContextMenu={handleContextMenu}
-                onDragStart={(e, item) => explorer.setDragItem({ item, columnIdx: idx })}
-                onDragOver={(e, item) => explorer.setDropTarget(item?.id || explorer.path[idx])}
+                onDragStart={(e, item, colIdx) => explorer.setDragItem({ item, columnIdx: colIdx })}
+                onDragOver={(e, item, colIdx) => explorer.setDropTarget(item?.id || explorer.path[colIdx] || null)}
                 onDragLeave={() => explorer.setDropTarget(null)}
-                onDrop={() => {}} // Internal D&D can be added here
+                onDrop={handleDrop} 
               />
-            ))}
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <RefreshCw size={24} className="text-zinc-800 animate-spin" />
+              </div>
+            )}
           </div>
         )}
 

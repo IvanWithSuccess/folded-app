@@ -45,6 +45,10 @@ interface AppStore {
   // Theme
   theme: string;
   setTheme: (themeId: string) => void;
+
+  // View Mode
+  viewMode: 'columns' | 'grid';
+  setViewMode: (mode: 'columns' | 'grid') => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -68,6 +72,9 @@ export const useAppStore = create<AppStore>((set) => ({
 
   theme: 'deep_dark',
   setTheme: (themeId) => set({ theme: themeId }),
+
+  viewMode: 'columns',
+  setViewMode: (mode) => set({ viewMode: mode }),
   
   setAccounts: (accounts) => set({ accounts }),
   setActiveAccount: (id) => set({ activeAccountId: id }),

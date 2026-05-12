@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RefreshCw, Search, X, Folder, ChevronRight, Upload, FolderUp, FolderPlus, Star, Filter, ArrowUpDown, Check } from 'lucide-react';
+import { RefreshCw, Search, X, Folder, ChevronRight, Upload, FolderUp, FolderPlus, Star, Filter, ArrowUpDown, Check, Columns, LayoutGrid } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 interface FileTopbarProps {
@@ -37,7 +37,7 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
   onSortFieldChange,
   onSortDirectionChange
 }) => {
-  const { activeAccountId, accounts } = useAppStore();
+  const { activeAccountId, accounts, viewMode, setViewMode } = useAppStore();
   const currentAccount = accounts.find(a => a.id === activeAccountId);
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -126,6 +126,24 @@ export const FileTopbar: React.FC<FileTopbarProps> = ({
             </button>
           </div>
         )}
+
+        {/* View Mode Toggle */}
+        <div className="flex items-center bg-zinc-900/50 rounded-lg p-0.5 border border-zinc-800">
+          <button 
+            onClick={() => setViewMode('columns')}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'columns' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-600 hover:text-zinc-400'}`}
+            title="Column View"
+          >
+            <Columns size={14} />
+          </button>
+          <button 
+            onClick={() => setViewMode('grid')}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-600 hover:text-zinc-400'}`}
+            title="Grid View"
+          >
+            <LayoutGrid size={14} />
+          </button>
+        </div>
 
         {/* Sorting Dropdown */}
         <div className="relative">

@@ -39,7 +39,11 @@ export function useAppInitialization() {
       if (onboarded === 'true') {
         setAppState('READY');
       } else {
-        setAppState('ONBOARDING');
+        // Auto-configure to Saved Messages and skip selection screen
+        console.log('Auto-configuring storage to Saved Messages...');
+        await invoke('update_setting', { key: 'storage_hub_type', value: 'saved_messages' });
+        await invoke('update_setting', { key: 'onboarded', value: 'true' });
+        setAppState('READY');
       }
     } catch (e) {
       console.warn('Failed to check onboarding status, defaulting to READY:', getErrorMessage(e));
