@@ -529,11 +529,14 @@ impl DavFile for UploadDavFile {
         async move {
             use tokio::io::AsyncWriteExt;
             self.file.flush().await.map_err(|_| FsError::GeneralFailure)?;
-            tokio::spawn(async move {
-                let manifest_res = orchestrator.upload_file(temp_path.clone(), session_manager, Arc::clone(&cache), name, None, fid, aid, None, None).await;
-                if let Ok(manifest) = manifest_res { let _ = cache.save_file(manifest).await; }
-                let _ = tokio::fs::remove_file(temp_path).await;
-            });
+            
+            // Wait for the actual upload to Telegram before telling the OS we are done
+            let manifest = orchestrator.upload_file(temp_path.clone(), session_manager, Arc::clone(&cache), name, None, fid, aid, None, None)
+                .await.map_err(|_| FsError::GeneralFailure)?;
+            
+            let _ = cache.save_file(manifest).await;
+            let _ = tokio::fs::remove_file(temp_path).await;
+            
             Ok(())
         }.boxed()
     }

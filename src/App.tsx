@@ -19,6 +19,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { applyTheme } from './theme/themes';
 import { Loader2 } from 'lucide-react';
 
+import { ProcessesView } from './components/ProcessesView';
+
 function App() {
   const { 
     appState, 
@@ -39,6 +41,15 @@ function App() {
     theme,
     setTheme
   } = useAppStore();
+
+  const [isStandaloneProcess, setIsStandaloneProcess] = React.useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'processes') {
+      setIsStandaloneProcess(true);
+    }
+  }, []);
 
   const { initialize, startSync, checkOnboarding } = useAppInitialization();
   useTaskSync();
@@ -78,6 +89,7 @@ function App() {
           const progress = Math.round((event.payload.processed_bytes * 100) / event.payload.total_bytes);
           setActiveTask(event.payload.file_id, progress);
           if (taskTimeout.current) clearTimeout(taskTimeout.current);
+          taskTimeout.current = setTimeout(() => setActiveTask(null), 3000);
         });
         unlistenFuncs.push(uUpload);
 
@@ -96,6 +108,16 @@ function App() {
         });
         unlistenFuncs.push(uMirror);
 
+        const uTaskStatus = await listen<{ id: string; status: string }>('task-status-change', (event) => {
+          if (!isMounted) return;
+          if (event.payload.status === 'COMPLETED' || event.payload.status === 'FAILED') {
+            if (activeTask === event.payload.id) {
+               setActiveTask(null);
+            }
+          }
+        });
+        unlistenFuncs.push(uTaskStatus);
+
       } catch (e) {
         console.error('Failed to setup global listeners:', e);
       }
@@ -113,7 +135,7 @@ function App() {
         }
       });
     };
-  }, [setActiveTask]);
+  }, [setActiveTask, activeTask]);
 
   // Update online status based on accounts AND actual connectivity
   useEffect(() => {
@@ -132,6 +154,10 @@ function App() {
       window.removeEventListener('offline', updateStatus);
     };
   }, [accounts, setNodeStatus]);
+
+  if (isStandaloneProcess) {
+    return <ProcessesView />;
+  }
 
   // Global Overlay States (Startup, Auth, Sync, Onboarding)
   if (appState === 'STARTUP') {

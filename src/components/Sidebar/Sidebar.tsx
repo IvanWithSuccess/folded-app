@@ -56,7 +56,13 @@ export const Sidebar: React.FC = () => {
                 <div 
                   className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-all border border-transparent
                     ${isActiveDrive ? 'bg-zinc-900/50 border-zinc-800/50 text-white' : 'text-zinc-500 hover:bg-zinc-900/30 hover:text-zinc-300'}`}
-                  onClick={() => toggleAccountExpanded(account.id)}
+                  onClick={() => {
+                    if (!isActiveDrive) {
+                      setActiveAccount(account.id);
+                      setActiveView('FILES');
+                    }
+                    toggleAccountExpanded(account.id);
+                  }}
                 >
                   <span className={isActiveDrive ? 'text-blue-500' : 'text-zinc-700'}>
                     {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -158,7 +164,7 @@ export const Sidebar: React.FC = () => {
         )}
 
         <AnimatePresence>
-          {queueTasks.length > 0 && (
+          {queueTasks.filter(t => t.status !== 'COMPLETED').length > 0 && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -172,7 +178,7 @@ export const Sidebar: React.FC = () => {
                </div>
                
                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                 {queueTasks.map(task => (
+                 {queueTasks.filter(t => t.status !== 'COMPLETED').map(task => (
                    <div key={task.id} className="flex flex-col gap-1">
                       <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-tighter">
                         <span className="text-zinc-400 truncate max-w-[120px]">{JSON.parse(task.payload).file_name || task.task_type}</span>

@@ -164,7 +164,8 @@ fn main() {
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>).unwrap();
             let show_i = MenuItem::with_id(app, "show", "Open Folded Cloud", true, None::<&str>).unwrap();
-            let menu = Menu::with_items(app, &[&show_i, &quit_i]).unwrap();
+            let proc_i = MenuItem::with_id(app, "processes", "Active Processes", true, None::<&str>).unwrap();
+            let menu = Menu::with_items(app, &[&show_i, &proc_i, &quit_i]).unwrap();
             
             let show_tray = tauri::async_runtime::block_on(async {
                 cache_for_setup.get_setting("show_tray_icon").await.unwrap_or(Some("true".into()))
@@ -177,7 +178,7 @@ fn main() {
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(tray_icon)
                 .menu(&menu)
-                .show_menu_on_left_click(true)
+                .show_menu_on_left_click(false) // Better to show window on left click, menu on right
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "quit" => {
@@ -194,16 +195,55 @@ fn main() {
                                 let _ = window.set_focus();
                             }
                         }
+                        "processes" => {
+                            let app_handle = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(proc_win) = app_handle.get_webview_window("processes") {
+                                    let _ = proc_win.show();
+                                    let _ = proc_win.set_focus();
+                                } else {
+                                    let _ = tauri::WebviewWindowBuilder::new(
+                                        &app_handle,
+                                        "processes",
+                                        tauri::WebviewUrl::App("index.html?view=processes".into())
+                                    )
+                                    .title("Folded Processes")
+                                    .inner_size(320.0, 480.0)
+                                    .resizable(false)
+                                    .always_on_top(true)
+                                    .decorations(true)
+                                    .build();
+                                }
+                            });
+                        }
                         _ => {}
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        let app_handle = tray.app_handle().clone();
+                        tauri::async_runtime::spawn(async move {
+                             if let Some(proc_win) = app_handle.get_webview_window("processes") {
+                                if proc_win.is_visible().unwrap_or(false) {
+                                    let _ = proc_win.hide();
+                                } else {
+                                    let _ = proc_win.show();
+                                    let _ = proc_win.set_focus();
+                                }
+                            } else {
+                                let _ = tauri::WebviewWindowBuilder::new(
+                                    &app_handle,
+                                    "processes",
+                                    tauri::WebviewUrl::App("index.html?view=processes".into())
+                                )
+                                .title("Folded Processes")
+                                .inner_size(320.0, 480.0)
+                                .resizable(false)
+                                .always_on_top(true)
+                                .decorations(true)
+                                .build();
+                            }
+                        });
                     }
                 })
                 .build(app)

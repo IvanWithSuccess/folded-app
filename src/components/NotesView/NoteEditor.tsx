@@ -178,9 +178,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               {!isReadOnly && (
                 <button 
                   onClick={() => handleSave().catch(e => console.error('Save error:', e))}
-                  disabled={!isModified && !isNew}
+                  disabled={(content.trim() === (note?.content || '').trim() && !isNew) || isSaving}
                   className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all
-                    ${isModified || isNew ? 'bg-zinc-100 text-black hover:bg-white shadow-lg active:scale-95' : 'bg-zinc-900 text-zinc-700 cursor-default'}`}
+                    ${(content.trim() !== (note?.content || '').trim() || isNew) ? 'bg-zinc-100 text-black hover:bg-white shadow-lg active:scale-95' : 'bg-zinc-900 text-zinc-700 cursor-default'}`}
                 >
                   <Save size={14} />
                   <span>{isNew ? 'Create' : 'Save Changes'}</span>

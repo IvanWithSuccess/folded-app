@@ -189,7 +189,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
 
     // Shift = range select within same column
     if (e?.shiftKey && lastClickedItem.current?.colIdx === colIdx) {
-      const col = explorer.columns[colIdx];
+      const sortedCols = getSortedColumns();
+      const col = sortedCols[colIdx];
       const allItems = [...col.folders, ...col.files];
       const lastIdx = allItems.findIndex(i => i.id === lastClickedItem.current!.id);
       const currIdx = allItems.findIndex(i => i.id === item.id);

@@ -516,6 +516,33 @@ export const SettingsView: React.FC = () => {
               </button>
            </div>
         </section>
+
+        {/* Application Info */}
+        <section className="pt-10 pb-10 flex flex-col items-center justify-center space-y-4 border-t border-zinc-900">
+           <div className="flex flex-col items-center gap-1 opacity-40">
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">Folded Cloud Engine</span>
+              <span className="text-[9px] font-mono text-zinc-600">PRODUCTION BUILD v0.1.0</span>
+           </div>
+           
+           <div className="flex items-center gap-4">
+              <button 
+                onClick={() => window.open('https://github.com/IvanWithSuccess/folded-app/issues', '_blank')}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-white rounded-full border border-zinc-800 transition-all"
+              >
+                <AlertTriangle size={12} className="text-amber-500" />
+                Report an Issue
+              </button>
+              
+              <div className="w-1 h-1 rounded-full bg-zinc-800" />
+              
+              <button 
+                onClick={() => window.open('https://folded.cloud', '_blank')}
+                className="text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-all"
+              >
+                Documentation
+              </button>
+           </div>
+        </section>
       </div>
     </div>
   );
