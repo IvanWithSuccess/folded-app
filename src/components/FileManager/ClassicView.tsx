@@ -37,14 +37,14 @@ export const ClassicView: React.FC<ClassicViewProps> = ({
 
   const getIcon = (item: SelectableItem, isSelected: boolean) => {
     const isFolderItem = isFolder(item);
-    if (isFolderItem) return <Folder size={40} className={isSelected ? 'text-white' : 'text-blue-500/80'} fill={isSelected ? 'white' : 'rgba(59, 130, 246, 0.2)'} strokeWidth={1.5} />;
+    if (isFolderItem) return <Folder size={40} className={isSelected ? 'text-blue-600' : 'text-blue-500/80'} fill={isSelected ? 'rgba(37, 99, 235, 0.1)' : 'rgba(59, 130, 246, 0.2)'} strokeWidth={1.5} />;
     
     const name = item.name.toLowerCase();
-    if (name.match(/\.(jpg|jpeg|png|gif|webp)$/)) return <FileImage size={40} className={isSelected ? 'text-white' : 'text-blue-400'} strokeWidth={1.5} />;
-    if (name.match(/\.(mp4|webm|mov)$/)) return <FileVideo size={40} className={isSelected ? 'text-white' : 'text-purple-400'} strokeWidth={1.5} />;
-    if (name.match(/\.(txt|md|doc|pdf)$/)) return <FileText size={40} className={isSelected ? 'text-white' : 'text-zinc-400'} strokeWidth={1.5} />;
+    if (name.match(/\.(jpg|jpeg|png|gif|webp)$/)) return <FileImage size={40} className={isSelected ? 'text-blue-600' : 'text-blue-400'} strokeWidth={1.5} />;
+    if (name.match(/\.(mp4|webm|mov)$/)) return <FileVideo size={40} className={isSelected ? 'text-purple-600' : 'text-purple-400'} strokeWidth={1.5} />;
+    if (name.match(/\.(txt|md|doc|pdf)$/)) return <FileText size={40} className={isSelected ? 'text-zinc-700' : 'text-zinc-400'} strokeWidth={1.5} />;
     
-    return <File size={40} className={isSelected ? 'text-white' : 'text-zinc-500'} strokeWidth={1.5} />;
+    return <File size={40} className={isSelected ? 'text-zinc-800' : 'text-zinc-500'} strokeWidth={1.5} />;
   };
 
   return (
@@ -88,7 +88,7 @@ export const ClassicView: React.FC<ClassicViewProps> = ({
                 <div className="relative">
                   {getIcon(item, isSelected)}
                   {item.is_managed && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center border-2 border-zinc-950">
+                    <div className={`absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center border-2 ${isSelected ? 'border-white' : 'border-zinc-950'}`}>
                       <RefreshCw size={8} className="text-white" />
                     </div>
                   )}
@@ -107,7 +107,7 @@ export const ClassicView: React.FC<ClassicViewProps> = ({
 
                 {/* Selection indicator dots for a more premium feel */}
                 {isSelected && (
-                  <div className="absolute top-2 right-2 text-zinc-400">
+                  <div className="absolute top-2 right-2 text-zinc-800">
                     <MoreVertical size={14} />
                   </div>
                 )}

@@ -4,7 +4,7 @@ use crate::session_manager::SessionManager;
 use crate::cluster::{ClusterOrchestrator, ChannelInfo};
 use grammers_tl_types as tl;
 use crate::cache::MetadataCache;
-use crate::SyncTracker;
+use crate::sync_tracker::SyncTracker;
 
 #[tauri::command]
 pub async fn cluster_download_file(

@@ -19,8 +19,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { applyTheme } from './theme/themes';
 import { Loader2 } from 'lucide-react';
 
-import { ProcessesView } from './components/ProcessesView';
-
 function App() {
   const { 
     appState, 
@@ -41,15 +39,6 @@ function App() {
     theme,
     setTheme
   } = useAppStore();
-
-  const [isStandaloneProcess, setIsStandaloneProcess] = React.useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'processes') {
-      setIsStandaloneProcess(true);
-    }
-  }, []);
 
   const { initialize, startSync, checkOnboarding } = useAppInitialization();
   useTaskSync();
@@ -154,10 +143,6 @@ function App() {
       window.removeEventListener('offline', updateStatus);
     };
   }, [accounts, setNodeStatus]);
-
-  if (isStandaloneProcess) {
-    return <ProcessesView />;
-  }
 
   // Global Overlay States (Startup, Auth, Sync, Onboarding)
   if (appState === 'STARTUP') {

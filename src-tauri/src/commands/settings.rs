@@ -1,6 +1,7 @@
 use tauri::State;
 use std::sync::Arc;
 use crate::cache::MetadataCache;
+use crate::sync_tracker::SyncTracker;
 
 #[tauri::command]
 pub async fn get_setting(
@@ -45,7 +46,7 @@ pub async fn update_setting(
 #[tauri::command]
 pub async fn purge_local_cache(
     cache_state: State<'_, Arc<MetadataCache>>,
-    sync_tracker: State<'_, Arc<crate::SyncTracker>>,
+    sync_tracker: State<'_, Arc<SyncTracker>>,
     _mirror_manager: State<'_, Arc<crate::cluster::mirrors::MirrorManager>>,
 ) -> Result<(), String> {
     log::warn!("SYSTEM: GLOBAL PURGE INITIATED. Stopping all background tasks...");

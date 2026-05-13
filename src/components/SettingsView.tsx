@@ -521,7 +521,7 @@ export const SettingsView: React.FC = () => {
         <section className="pt-10 pb-10 flex flex-col items-center justify-center space-y-4 border-t border-zinc-900">
            <div className="flex flex-col items-center gap-1 opacity-40">
               <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">Folded Cloud Engine</span>
-              <span className="text-[9px] font-mono text-zinc-600">PRODUCTION BUILD v0.1.0</span>
+              <span className="text-[9px] font-mono text-zinc-600">PRODUCTION BUILD v1.0.1</span>
            </div>
            
            <div className="flex items-center gap-4">

@@ -3,18 +3,11 @@
     windows_subsystem = "windows"
 )]
 
-mod session_manager;
-mod cluster;
-mod cache;
-mod webdav;
-mod os_integration;
-mod commands;
-
-use crate::session_manager::SessionManager;
-use crate::cluster::ClusterOrchestrator;
-use crate::cache::MetadataCache;
-use crate::webdav::WebDavBridge;
-use crate::cluster::mirrors::MirrorManager;
+use folded::SessionManager;
+use folded::ClusterOrchestrator;
+use folded::MetadataCache;
+use folded::WebDavBridge;
+use folded::cluster::mirrors::MirrorManager;
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
@@ -23,33 +16,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::menu::{Menu, MenuItem};
 use tauri::Manager;
 
-pub struct SyncTracker {
-    pub active_crawlers: Arc<TokioMutex<HashMap<String, CancellationToken>>>,
-}
-
-impl SyncTracker {
-    pub fn new() -> Self {
-        Self {
-            active_crawlers: Arc::new(TokioMutex::new(HashMap::new())),
-        }
-    }
-
-    pub async fn stop_crawler(&self, account_id: &str) {
-        let mut active = self.active_crawlers.lock().await;
-        if let Some(token) = active.remove(account_id) {
-            token.cancel();
-            log::info!("Signal sent to stop crawler for account {}", account_id);
-        }
-    }
-
-    pub async fn stop_all(&self) {
-        let mut active = self.active_crawlers.lock().await;
-        for (account_id, token) in active.drain() {
-            token.cancel();
-            log::info!("Global Stop: Crawler for {} signaled to stop", account_id);
-        }
-    }
-}
+use folded::SyncTracker;
 
 const API_ID: i32 = 26947469; 
 const API_HASH: &str = "731a222f9dd8b290db925a6a382159dd";
@@ -149,7 +116,7 @@ fn main() {
             ));
             app.manage(Arc::clone(&mirror_manager));
             
-            let task_manager = Arc::new(crate::cluster::task_manager::TaskManager::new(
+            let task_manager = Arc::new(folded::cluster::task_manager::TaskManager::new(
                 app.handle().clone(),
                 Arc::clone(&metadata_cache),
                 Arc::clone(&cluster_orchestrator),
@@ -164,8 +131,7 @@ fn main() {
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>).unwrap();
             let show_i = MenuItem::with_id(app, "show", "Open Folded Cloud", true, None::<&str>).unwrap();
-            let proc_i = MenuItem::with_id(app, "processes", "Active Processes", true, None::<&str>).unwrap();
-            let menu = Menu::with_items(app, &[&show_i, &proc_i, &quit_i]).unwrap();
+            let menu = Menu::with_items(app, &[&show_i, &quit_i]).unwrap();
             
             let show_tray = tauri::async_runtime::block_on(async {
                 cache_for_setup.get_setting("show_tray_icon").await.unwrap_or(Some("true".into()))
@@ -178,7 +144,7 @@ fn main() {
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(tray_icon)
                 .menu(&menu)
-                .show_menu_on_left_click(false) // Better to show window on left click, menu on right
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "quit" => {
@@ -186,7 +152,7 @@ fn main() {
                             let mount_path = tauri::async_runtime::block_on(async {
                                 cache.get_setting("mount_path").await.unwrap_or(None)
                             });
-                            let _ = crate::os_integration::unmount_drive("Z:", mount_path);
+                            let _ = folded::os_integration::unmount_drive("Z:", mount_path);
                             std::process::exit(0);
                         }
                         "show" => {
@@ -195,55 +161,16 @@ fn main() {
                                 let _ = window.set_focus();
                             }
                         }
-                        "processes" => {
-                            let app_handle = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                if let Some(proc_win) = app_handle.get_webview_window("processes") {
-                                    let _ = proc_win.show();
-                                    let _ = proc_win.set_focus();
-                                } else {
-                                    let _ = tauri::WebviewWindowBuilder::new(
-                                        &app_handle,
-                                        "processes",
-                                        tauri::WebviewUrl::App("index.html?view=processes".into())
-                                    )
-                                    .title("Folded Processes")
-                                    .inner_size(320.0, 480.0)
-                                    .resizable(false)
-                                    .always_on_top(true)
-                                    .decorations(true)
-                                    .build();
-                                }
-                            });
-                        }
                         _ => {}
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
-                        let app_handle = tray.app_handle().clone();
-                        tauri::async_runtime::spawn(async move {
-                             if let Some(proc_win) = app_handle.get_webview_window("processes") {
-                                if proc_win.is_visible().unwrap_or(false) {
-                                    let _ = proc_win.hide();
-                                } else {
-                                    let _ = proc_win.show();
-                                    let _ = proc_win.set_focus();
-                                }
-                            } else {
-                                let _ = tauri::WebviewWindowBuilder::new(
-                                    &app_handle,
-                                    "processes",
-                                    tauri::WebviewUrl::App("index.html?view=processes".into())
-                                )
-                                .title("Folded Processes")
-                                .inner_size(320.0, 480.0)
-                                .resizable(false)
-                                .always_on_top(true)
-                                .decorations(true)
-                                .build();
-                            }
-                        });
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
                     }
                 })
                 .build(app)
@@ -260,7 +187,7 @@ fn main() {
                     .unwrap_or(Some("false".into()))
                     .unwrap_or("false".into()) == "true";
                 
-                let _ = crate::os_integration::set_autostart(launch_on_startup);
+                let _ = folded::os_integration::set_autostart(launch_on_startup);
             });
 
             let webdav_bridge = Arc::clone(&webdav_bridge);
@@ -373,7 +300,7 @@ fn main() {
                         let mount_path = cache_for_mount.get_setting("mount_path").await.unwrap_or(None);
                         log::info!("Initiating virtual drive mount for native streaming in 2000ms...");
                         tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-                        let _ = crate::os_integration::mount_drive(9876, "Z:", mount_path);
+                        let _ = folded::os_integration::mount_drive(9876, "Z:", mount_path);
                     } else {
                         log::info!("Virtual drive mount disabled in settings, skipping.");
                     }
@@ -409,7 +336,7 @@ fn main() {
         });
         
     let app = builder
-        .invoke_handler(crate::generate_handler!())
+        .invoke_handler(folded::generate_handler!())
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
@@ -437,7 +364,7 @@ fn main() {
                     let mount_path = tauri::async_runtime::block_on(async {
                         cache.get_setting("mount_path").await.unwrap_or(None)
                     });
-                    let _ = crate::os_integration::unmount_drive("Z:", mount_path);
+                    let _ = folded::os_integration::unmount_drive("Z:", mount_path);
                 }
             }
             #[cfg(target_os = "macos")]

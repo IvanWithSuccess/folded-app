@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
           <h3 className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">Storage Nodes</h3>
           
           {accounts.map(account => {
-            const isExpanded = expandedAccounts.has(account.id);
+            const isExpanded = expandedAccounts instanceof Set ? expandedAccounts.has(account.id) : Array.isArray(expandedAccounts) ? (expandedAccounts as any).includes(account.id) : false;
             const isActiveDrive = activeAccountId === account.id;
 
             return (

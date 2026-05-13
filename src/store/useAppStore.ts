@@ -141,8 +141,8 @@ export const useAppStore = create<AppStore>()(
         viewMode: state.viewMode,
         expandedAccounts: Array.from(state.expandedAccounts),
       }),
-      onRehydrateStorage: (state: any) => {
-        if (state && state.expandedAccounts) {
+      onRehydrateStorage: () => (state) => {
+        if (state && state.expandedAccounts && Array.isArray(state.expandedAccounts)) {
           state.expandedAccounts = new Set(state.expandedAccounts);
         }
       },
