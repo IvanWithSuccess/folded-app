@@ -2,7 +2,7 @@ use tauri::State;
 use std::sync::Arc;
 use crate::session_manager::{SessionManager, AuthResponse, TelegramAccount};
 use crate::cache::MetadataCache;
-use crate::sync_tracker::SyncTracker;
+use crate::SyncTracker;
 use crate::cluster::mirrors::MirrorManager;
 
 #[tauri::command]

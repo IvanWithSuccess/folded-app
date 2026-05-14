@@ -179,6 +179,12 @@ impl ClusterOrchestrator {
         let client = session_manager.get_client_by_id(account_id).await
             .ok_or_else(|| anyhow!("Account not connected"))?;
 
+        let accounts = session_manager.get_active_accounts().await;
+        let my_account = accounts.iter().find(|a| a.id == account_id);
+        let sender_display = my_account.map(|a| {
+            a.username.as_ref().map(|u| format!("@{}", u)).unwrap_or_else(|| a.name.clone())
+        });
+
         let (forward_id, backward_id) = cache.get_sync_state(account_id).await?.unwrap_or((0, 0));
         let input_peer_self = tl::enums::InputPeer::PeerSelf;
         
@@ -192,7 +198,7 @@ impl ClusterOrchestrator {
             if msg.id() <= forward_id { break; }
             if msg.id() > max_new_id { max_new_id = msg.id(); }
 
-            self.process_message_for_index(account_id, &msg, &cache).await?;
+            self.process_message_for_index(account_id, &msg, &cache, sender_display.as_deref()).await?;
             discovered_count += 1;
             
             let batch_limit = if forward_id == 0 { 500 } else { 50 };
@@ -220,7 +226,7 @@ impl ClusterOrchestrator {
             min_checked_id = msg.id();
             seen_ids.insert(msg_id);
             
-            self.process_message_for_index(account_id, &msg, &cache).await?;
+            self.process_message_for_index(account_id, &msg, &cache, sender_display.as_deref()).await?;
             audit_count += 1;
             
             // For the initial crawl (backward_id == 0), we use a larger batch size
@@ -259,6 +265,7 @@ impl ClusterOrchestrator {
         account_id: &str,
         msg: &grammers_client::message::Message,
         cache: &Arc<crate::cache::MetadataCache>,
+        sender_display: Option<&str>,
     ) -> Result<()> {
         use grammers_client::media::Media;
         
@@ -372,7 +379,7 @@ impl ClusterOrchestrator {
             let from_self = if msg.forward_header().is_none() { 1i64 } else { 0i64 };
             let att_ids_str = if attachment_ids.is_empty() { None } else { Some(attachment_ids.join(",")) };
 
-            sqlx::query("INSERT OR REPLACE INTO notes (id, account_id, peer_id, message_id, content, created_at, from_self, attachment_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+            sqlx::query("INSERT OR REPLACE INTO notes (id, account_id, peer_id, message_id, content, created_at, from_self, sender_name, attachment_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
                 .bind(&note_id)
                 .bind(account_id)
                 .bind(msg.peer_id().bot_api_dialog_id())
@@ -380,6 +387,7 @@ impl ClusterOrchestrator {
                 .bind(msg.text())
                 .bind(msg.date().timestamp())
                 .bind(from_self)
+                .bind(sender_display)
                 .bind(att_ids_str)
                 .execute(cache.get_pool()).await?;
         }

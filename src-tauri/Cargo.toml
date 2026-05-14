@@ -4,7 +4,6 @@ version = "1.0.1"
 description = "Telegram Cloud Storage Native App"
 authors = ["Antigravity"]
 edition = "2021"
-default-run = "folded"
 
 [dependencies]
 tauri = { version = "2.1.1", features = ["macos-private-api", "image-png", "tray-icon"] }

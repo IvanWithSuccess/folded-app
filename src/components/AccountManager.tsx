@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { LoginModal } from './LoginModal';
 import { invoke } from '@tauri-apps/api/core';
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { confirm, message } from '@tauri-apps/plugin-dialog';
 import { 
   Plus, Users, LogOut, 
   RefreshCw, Cloud, HardDrive, Info, 
   User, CheckCircle2, Clock, ChevronRight
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { useAppInitialization } from '../hooks/useAppInitialization';
 
 interface Account {
   id: string;
@@ -24,6 +25,7 @@ interface AccountManagerProps {
 
 export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty }) => {
   const { setAccounts: setGlobalAccounts, logoutAccount: logoutGlobal } = useAppStore();
+  const { initialize } = useAppInitialization();
   const [showLogin, setShowLogin] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
       await fetchAccounts();
     } catch (e) {
       console.error('Logout failed:', e);
-      alert('Logout failed: ' + ((e as Error).message || String(e)));
+      await message('Logout failed: ' + ((e as Error).message || String(e)), { title: 'Auth Error', kind: 'error' });
     }
   };
 
@@ -174,7 +176,10 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountsEmpty 
       {showLogin && (
         <LoginModal 
           onClose={() => setShowLogin(false)}
-          onSuccess={() => fetchAccounts()}
+          onSuccess={async () => {
+            setShowLogin(false);
+            await initialize();
+          }}
         />
       )}
     </div>

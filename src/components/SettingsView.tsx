@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { confirm } from '@tauri-apps/plugin-dialog';
-import { open } from '@tauri-apps/plugin-dialog';
+import { confirm, message, open } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../store/useAppStore';
 import { THEMES } from '../theme/themes';
 import { 
@@ -157,11 +156,11 @@ export const SettingsView: React.FC = () => {
     if (confirmed) {
         try {
             await invoke('purge_local_cache');
-            alert('Database wiped successfully. Please restart the application to begin a fresh sync.');
+            await message('Database wiped successfully. Please restart the application to begin a fresh sync.', { title: 'System Reset', kind: 'info' });
             window.location.reload();
         } catch (e) {
             console.error('Failed to wipe database:', e);
-            alert(`Failed to wipe database: ${((e as Error).message || String(e))}`);
+            await message(`Failed to wipe database: ${((e as Error).message || String(e))}`, { title: 'Error', kind: 'error' });
         }
     }
   };
@@ -384,7 +383,7 @@ export const SettingsView: React.FC = () => {
                         if (dest && !Array.isArray(dest)) {
                           const home = await invoke<string>('get_home_dir');
                           await invoke('create_alias', { sourcePath: `${home}/FoldedCloud`, destinationFolder: dest });
-                          alert('Alias established.');
+                          await message('Alias established.', { title: 'System', kind: 'info' });
                         }
                       } catch (e) { console.error(e); }
                     }}

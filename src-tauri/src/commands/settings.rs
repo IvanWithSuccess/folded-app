@@ -1,7 +1,7 @@
 use tauri::State;
 use std::sync::Arc;
 use crate::cache::MetadataCache;
-use crate::sync_tracker::SyncTracker;
+use crate::SyncTracker;
 
 #[tauri::command]
 pub async fn get_setting(

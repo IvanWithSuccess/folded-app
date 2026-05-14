@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, message } from '@tauri-apps/plugin-dialog';
 import { SelectableItem, FileManifest, FolderInfo } from '../types/file';
 import { isFolder } from '../utils/fileUtils';
 import { getErrorMessage } from '../utils/errorUtils';
@@ -42,7 +42,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Failed to create folder: ' + getErrorMessage(e));
+      await message('Failed to create folder: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     }
   }, [activeDriveId, path, refresh]);
 
@@ -56,7 +56,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Rename failed: ' + getErrorMessage(e));
+      await message('Rename failed: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     }
   }, [path, refresh]);
 
@@ -73,7 +73,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Delete failed: ' + getErrorMessage(e));
+      await message('Delete failed: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +95,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         destPath
       });
     } catch (e) {
-      alert('Download failed: ' + getErrorMessage(e));
+      await message('Download failed: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     }
   }, []);
 
@@ -120,7 +120,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert(`${mode === 'move' ? 'Move' : 'Copy'} failed: ` + getErrorMessage(e));
+      await message(`${mode === 'move' ? 'Move' : 'Copy'} failed: ` + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +142,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
         targetPath
       });
     } catch (e) {
-      alert('Download failed: ' + getErrorMessage(e));
+      await message('Download failed: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +180,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Upload failed: ' + getErrorMessage(e));
+      await message('Upload failed: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -196,7 +196,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Failed to toggle starred: ' + getErrorMessage(e));
+      await message('Failed to toggle starred: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     }
   }, [activeDriveId, path, refresh]);
 
@@ -207,7 +207,7 @@ export function useFileActions({ activeDriveId, refresh, path, setIsLoading }: U
       await invoke('push_manifest', { accountId: activeDriveId });
       await refresh(path);
     } catch (e) {
-      alert('Delete with versions failed: ' + getErrorMessage(e));
+      await message('Delete with versions failed: ' + getErrorMessage(e), { title: 'Operation Error', kind: 'error' });
     } finally {
       setIsLoading(false);
     }

@@ -65,9 +65,11 @@ pub async fn create_note(
 
     let accounts = session_state.get_active_accounts().await;
     let my_account = accounts.iter().find(|a| a.id == account_id);
-    let sender_name = my_account.map(|a| a.name.clone());
+    let sender_display = my_account.map(|a| {
+        a.username.as_ref().map(|u| format!("@{}", u)).unwrap_or_else(|| a.name.clone())
+    });
 
-    cache_state.save_note(&note_id, &account_id, peer_id, message_id, &content, true, sender_name.clone(), None)
+    cache_state.save_note(&note_id, &account_id, peer_id, message_id, &content, true, sender_display.clone(), None)
         .await.map_err(|e| e.to_string())?;
 
     Ok(NoteInfo {
@@ -78,7 +80,7 @@ pub async fn create_note(
         content,
         created_at: chrono::Utc::now().timestamp(),
         from_self: true,
-        sender_name,
+        sender_name: sender_display,
         attachment_ids: None,
     })
 }

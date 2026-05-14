@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { message } from '@tauri-apps/plugin-dialog';
 import { FileManifest, SelectableItem, FolderHistoryEvent } from '../../types/file';
 import { formatBytes, isFile } from '../../utils/fileUtils';
 import { 
@@ -77,7 +78,7 @@ export const FileInspector: React.FC<FileInspectorProps> = ({
       if (onRefresh) onRefresh();
     } catch (e) {
       console.error('Failed to restore version:', e);
-      alert(`Restore failed: ${((e as Error).message || String(e))}`);
+      await message(`Restore failed: ${((e as Error).message || String(e))}`, { title: 'Restore Error', kind: 'error' });
     } finally {
       setActionLoading(null);
     }
@@ -87,10 +88,10 @@ export const FileInspector: React.FC<FileInspectorProps> = ({
     setActionLoading(versionId);
     try {
       const path = await invoke<string>('download_file_version', { versionFileId: versionId });
-      alert(`File downloaded to: ${path}`);
+      await message(`File downloaded to: ${path}`, { title: 'Download Success', kind: 'info' });
     } catch (e) {
       console.error('Failed to download version:', e);
-      alert(`Download failed: ${((e as Error).message || String(e))}`);
+      await message(`Download failed: ${((e as Error).message || String(e))}`, { title: 'Download Error', kind: 'error' });
     } finally {
       setActionLoading(null);
     }
@@ -104,7 +105,7 @@ export const FileInspector: React.FC<FileInspectorProps> = ({
       if (onRefresh) onRefresh();
     } catch (e) {
       console.error('Failed to restore item:', e);
-      alert(`Restore failed: ${((e as Error).message || String(e))}`);
+      await message(`Restore failed: ${((e as Error).message || String(e))}`, { title: 'Restore Error', kind: 'error' });
     } finally {
       setActionLoading(null);
     }

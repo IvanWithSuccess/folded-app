@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { confirm, message } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../store/useAppStore';
 import { getErrorMessage } from '../utils/errorUtils';
 
@@ -97,7 +97,7 @@ export function useNotes() {
       await fetchNotes();
     } catch (e) {
       if (isMounted.current) {
-        alert('Failed to update note: ' + getErrorMessage(e));
+        await message('Failed to update note: ' + getErrorMessage(e), { title: 'Note Error', kind: 'error' });
       }
     }
   }, [fetchNotes]);
@@ -121,7 +121,7 @@ export function useNotes() {
     } catch (e) {
       if (isMounted.current) {
         console.error('Delete failed:', getErrorMessage(e));
-        alert('Failed to delete note: ' + getErrorMessage(e));
+        await message('Failed to delete note: ' + getErrorMessage(e), { title: 'Note Error', kind: 'error' });
       }
     }
   }, [fetchNotes]);
@@ -138,7 +138,7 @@ export function useNotes() {
     } catch (e) {
       if (isMounted.current) {
         console.error('Create failed:', getErrorMessage(e));
-        alert('Failed to create note: ' + getErrorMessage(e));
+        await message('Failed to create note: ' + getErrorMessage(e), { title: 'Note Error', kind: 'error' });
       }
       return null;
     }
@@ -156,7 +156,7 @@ export function useNotes() {
       await fetchNotes();
     } catch (e) {
       console.error('Attach failed:', getErrorMessage(e));
-      alert('Failed to attach: ' + getErrorMessage(e));
+      await message('Failed to attach: ' + getErrorMessage(e), { title: 'Note Error', kind: 'error' });
     }
   }, [notes, fetchNotes]);
 
@@ -172,7 +172,7 @@ export function useNotes() {
       await fetchNotes();
     } catch (e) {
       console.error('Detach failed:', getErrorMessage(e));
-      alert('Failed to detach: ' + getErrorMessage(e));
+      await message('Failed to detach: ' + getErrorMessage(e), { title: 'Note Error', kind: 'error' });
     }
   }, [notes, fetchNotes]);
 

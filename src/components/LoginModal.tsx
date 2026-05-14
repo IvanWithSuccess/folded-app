@@ -10,7 +10,7 @@ import { useAppStore } from '../store/useAppStore';
 
 interface LoginModalProps {
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (accountId?: string) => void;
 }
 
 type AuthStep = 'phone' | 'code' | 'qr' | 'password';
@@ -60,7 +60,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
           const response: any = await invoke('auth_poll_qr');
             if (response.Success) {
               clearInterval(pollInterval);
-              onSuccess();
+              onSuccess(response.Success.id);
               onClose();
             } else if (response === 'PasswordRequired') {
               clearInterval(pollInterval);
@@ -107,7 +107,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
     try {
       const response: any = await invoke('auth_verify_code', { phone, code });
       if (response.Success) {
-        onSuccess();
+        onSuccess(response.Success.id);
         onClose();
       } else if (response === 'PasswordRequired') {
         setStep('password');
@@ -145,7 +145,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
     try {
       const response: any = await invoke('auth_verify_password', { phone, password });
       if (response.Success) {
-        onSuccess();
+        onSuccess(response.Success.id);
         onClose();
       } else if (response.Error) {
         setError(response.Error);

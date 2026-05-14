@@ -69,16 +69,33 @@ export function useAppInitialization() {
         return;
       }
 
-      const primary = healthyAccounts[0];
-      setActiveAccount(primary.id);
+      // Set active account to the first one by default
+      setActiveAccount(healthyAccounts[0].id);
       
-      // Set to SYNCING state to show splash screen during first startup
+      // Set to SYNCING state to show splash screen
       setAppState('SYNCING');
       setActiveView('FILES');
       
-      await startSync(primary);
+      // Sync all accounts to ensure the cluster is fully hydrated
+      for (let i = 0; i < healthyAccounts.length; i++) {
+        const acc = healthyAccounts[i];
+        const accountName = acc.name || acc.phone || `Node ${i+1}`;
+        const stepSize = 100 / healthyAccounts.length;
+        const currentBase = i * stepSize;
+        
+        setSyncStatus(`Contacting ${accountName}...`, currentBase + (stepSize * 0.2));
+        await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for visual feedback
+        
+        setSyncStatus(`Syncing Node: ${accountName}`, currentBase + (stepSize * 0.5));
+        await invoke('sync_account', { accountId: acc.id });
+        
+        setSyncStatus(`Node ${accountName} Ready`, currentBase + stepSize);
+      }
       
-      // Once sync is done, set to READY
+      setSyncStatus('Cluster Synchronized', 100);
+      
+      // Give the user a moment to see the 100% state
+      await new Promise(resolve => setTimeout(resolve, 500));
       setAppState('READY');
     } catch (e) {
       console.error('Initialization failed:', getErrorMessage(e));

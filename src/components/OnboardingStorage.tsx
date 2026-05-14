@@ -5,6 +5,7 @@ import {
   Cloud, Shield, Layout, Zap, ChevronRight, 
   ChevronLeft, Sparkles, Star, Hash, Plus, Loader2, Check 
 } from 'lucide-react';
+import { message } from '@tauri-apps/plugin-dialog';
 
 interface OnboardingStorageProps {
   accountId: string;
@@ -53,7 +54,7 @@ export const OnboardingStorage: React.FC<OnboardingStorageProps> = ({ accountId,
       setSelectedChannelId(channelId);
       setHubType('channel');
     } catch (e) {
-      alert("Failed to create channel: " + ((e as Error).message || String(e)) + ". You might have reached Telegram's channel limit.");
+      await message("Failed to create channel: " + ((e as Error).message || String(e)) + ". You might have reached Telegram's channel limit.", { title: 'Storage Hub Error', kind: 'error' });
     } finally {
       setCreating(false);
     }

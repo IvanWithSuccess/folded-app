@@ -5,9 +5,7 @@ import {
   Save, 
   User, 
   Clock, 
-  Share2, 
   Shield,
-  Lock,
   Paperclip,
   Loader2,
   File,
@@ -18,7 +16,7 @@ import {
 } from 'lucide-react';
 import { NoteInfo } from '../../hooks/useNotes';
 import { invoke } from '@tauri-apps/api/core';
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { confirm, message } from '@tauri-apps/plugin-dialog';
 import { FilePickerModal } from './FilePickerModal';
 import { getErrorMessage } from '../../utils/errorUtils';
 
@@ -128,7 +126,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const path = await invoke<string>('cluster_download_to_tmp', { fileId });
       await invoke('open_system_file', { path });
     } catch (e) {
-      alert('Failed to open file: ' + getErrorMessage(e));
+      await message('Failed to open file: ' + getErrorMessage(e), { title: 'Note Error', kind: 'error' });
     }
   };
 
@@ -187,12 +185,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </button>
               )}
 
-              {isReadOnly && (
-                <div className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-zinc-900/80 border border-zinc-800 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                  <Lock size={12} className="text-zinc-700" />
-                  <span>Forwarded Note</span>
-                </div>
-              )}
 
              {!isNew && (
                <button 
@@ -303,10 +295,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                        <User size={12} className="text-zinc-500" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">From</span>
+                      <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Source Node</span>
                       <span className={`text-[10px] font-bold ${note && !note.from_self ? 'text-blue-500' : 'text-zinc-400'}`}>
-                        {note?.sender_name || 'System'}
-                        {note && !note.from_self && ' (Cloud)'}
+                        {note?.sender_name || 'Local System'}
                       </span>
                     </div>
                   </div>
@@ -316,20 +307,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                        <Clock size={12} className="text-zinc-500" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Date</span>
+                      <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Timestamp</span>
                       <span className="text-[10px] font-bold text-zinc-400">
                         {note ? new Date(note.created_at * 1000).toLocaleString() : '---'}
                       </span>
                     </div>
                   </div>
                 </div>
-
-                {isReadOnly && (
-                  <div className="text-[9px] font-medium text-zinc-600 uppercase tracking-wider flex items-center gap-2 bg-zinc-950/50 px-3 py-1 rounded-lg border border-zinc-900">
-                    <Share2 size={10} strokeWidth={3} />
-                    External sync active
-                  </div>
-                )}
               </div>
             </div>
           )}

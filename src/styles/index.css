@@ -131,3 +131,9 @@ vite-error-overlay,
 .mask-fade-left {
   mask-image: linear-gradient(to left, black 85%, transparent 100%);
 }
+
+/* Industrial UI Utilities */
+.bg-grid-pattern {
+  background-image: radial-gradient(circle, var(--app-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}

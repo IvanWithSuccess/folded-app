@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { message } from '@tauri-apps/plugin-dialog';
 import { FileManifest } from '../../types/file';
 import { X, Search, Send, User, Users, MessageSquare, Loader2 } from 'lucide-react';
 
@@ -43,7 +44,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ file, onClose }) => {
       });
       onClose();
     } catch (e) {
-      alert('Share failed: ' + ((e as Error).message || String(e)));
+      await message('Share failed: ' + ((e as Error).message || String(e)), { title: 'Transmission Error', kind: 'error' });
     } finally {
       setSharing(null);
     }
