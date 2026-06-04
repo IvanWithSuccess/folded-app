@@ -196,6 +196,40 @@ export const SettingsView: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  const handleReportIssue = async () => {
+    try {
+      const report: any = await invoke('get_system_report');
+      const email = 'delaukr@gmail.com';
+      const subject = encodeURIComponent('Folded App Bug Report');
+      const bodyText = `--- Describe your issue here ---
+
+
+Device info:
+- Model: ${report.device_model}
+- OS Name: ${report.os_name}
+- OS Version: ${report.os_version}
+- Architecture: ${report.arch}
+- App Version: ${report.app_version}
+- Local Time: ${report.local_time}
+
+Logs (last 50 lines):
+${report.logs}
+`;
+      const body = encodeURIComponent(bodyText);
+      const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+      await invoke('open_system_file', { path: mailtoUrl });
+    } catch (e) {
+      console.error('Failed to get system report or open mail client', e);
+      const fallbackUrl = `mailto:delaukr@gmail.com?subject=Folded%20App%20Bug%20Report&body=Failed%20to%20collect%20system%20report.%20Error%3A%20${encodeURIComponent(String(e))}`;
+      try {
+        await invoke('open_system_file', { path: fallbackUrl });
+      } catch (err) {
+        window.open(fallbackUrl, '_self');
+      }
+    }
+  };
+
+
   if (loading) {
      return (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 space-y-4">
@@ -525,20 +559,11 @@ export const SettingsView: React.FC = () => {
            
            <div className="flex items-center gap-4">
               <button 
-                onClick={() => window.open('https://github.com/IvanWithSuccess/folded-app/issues', '_blank')}
+                onClick={handleReportIssue}
                 className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800 text-[9px] font-black uppercase tracking-widest text-zinc-400 hover:text-white rounded-full border border-zinc-800 transition-all"
               >
                 <AlertTriangle size={12} className="text-amber-500" />
                 Report an Issue
-              </button>
-              
-              <div className="w-1 h-1 rounded-full bg-zinc-800" />
-              
-              <button 
-                onClick={() => window.open('https://folded.cloud', '_blank')}
-                className="text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-all"
-              >
-                Documentation
               </button>
            </div>
         </section>

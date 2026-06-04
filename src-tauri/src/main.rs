@@ -51,17 +51,66 @@ impl SyncTracker {
     }
 }
 
+struct FileAndStdoutLogger {
+    file_path: std::path::PathBuf,
+    level: log::LevelFilter,
+}
+
+impl log::Log for FileAndStdoutLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= self.level
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            let msg = format!(
+                "[{}] {} - {}\n",
+                chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                record.level(),
+                record.args()
+            );
+            print!("{}", msg);
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.file_path)
+            {
+                use std::io::Write;
+                let _ = file.write_all(msg.as_bytes());
+            }
+        }
+    }
+
+    fn flush(&self) {}
+}
+
 const API_ID: i32 = 26947469; 
 const API_HASH: &str = "731a222f9dd8b290db925a6a382159dd";
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    
     let home_dir = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).expect("Could not find home directory");
     let app_data_dir = std::path::PathBuf::from(home_dir).join(".folded");
     let _ = std::fs::create_dir_all(&app_data_dir);
+
+    let log_file_path = app_data_dir.join("app.log");
+    if log_file_path.exists() {
+        if let Ok(metadata) = std::fs::metadata(&log_file_path) {
+            if metadata.len() > 10 * 1024 * 1024 {
+                let _ = std::fs::remove_file(&log_file_path);
+            }
+        }
+    }
+
+    let logger = FileAndStdoutLogger {
+        file_path: log_file_path,
+        level: log::LevelFilter::Info,
+    };
+    log::set_boxed_logger(Box::new(logger))
+        .map(|()| log::set_max_level(log::LevelFilter::Info))
+        .expect("Failed to initialize custom logger");
     
     let sessions_dir = app_data_dir.join("sessions");
+
     let _ = std::fs::create_dir_all(&sessions_dir);
 
     let tmp_dir = app_data_dir.join("tmp");

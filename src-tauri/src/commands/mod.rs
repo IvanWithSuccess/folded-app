@@ -67,6 +67,8 @@ macro_rules! generate_handler {
             $crate::commands::system::download_items_to_path,
             $crate::commands::system::create_alias,
             $crate::commands::system::get_home_dir,
+            $crate::commands::system::get_system_report,
+
             
             $crate::commands::settings::get_setting,
             $crate::commands::settings::update_setting,

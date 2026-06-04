@@ -304,3 +304,47 @@ async fn download_folder_recursive(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn get_system_report() -> Result<serde_json::Value, String> {
+    let home_dir = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).map_err(|_| "Could not find home directory".to_string())?;
+    let app_data_dir = std::path::PathBuf::from(home_dir).join(".folded");
+    let log_path = app_data_dir.join("app.log");
+    
+    let run_cmd = |cmd: &str, args: &[&str]| -> String {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|_| "Unknown".to_string())
+    };
+
+    let device_model = run_cmd("sysctl", &["-n", "hw.model"]);
+    let os_name = run_cmd("sw_vers", &["-productName"]);
+    let os_version = run_cmd("sw_vers", &["-productVersion"]);
+    let arch = std::env::consts::ARCH;
+    let app_version = env!("CARGO_PKG_VERSION");
+    let local_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    let logs = std::fs::read_to_string(&log_path)
+        .unwrap_or_else(|_| "No logs found".to_string());
+    
+    let log_lines: Vec<&str> = logs.lines().collect();
+    let last_lines = if log_lines.len() > 50 {
+        &log_lines[log_lines.len() - 50..]
+    } else {
+        &log_lines[..]
+    };
+    let logs_summary = last_lines.join("\n");
+
+    Ok(serde_json::json!({
+        "device_model": device_model,
+        "os_name": os_name,
+        "os_version": os_version,
+        "arch": arch,
+        "app_version": app_version,
+        "local_time": local_time,
+        "logs": logs_summary,
+    }))
+}
+
