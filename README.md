@@ -16,17 +16,6 @@ The app allows you to mount your storage as a virtual network drive, providing i
 
 The system is built on the principles of local metadata indexing and on-demand data streaming:
 
-```mermaid
-graph TD
-    User([User / OS Finder]) -->|File Requests / Read & Write| WD[WebDAV Bridge (Axum)]
-    WD -->|Find Paths & Chunks| DB[(Local SQLite DB)]
-    WD -->|Range Requests / Offsets| MT[MTProto Client (Grammers)]
-    MT -->|Download/Upload Chunks| TG[Telegram Servers]
-    
-    Crawler[Background Synchronizer] -->|Recursive Saved Messages Scan| TG
-    Crawler -->|Save Metadata| DB
-```
-
 ### 1. Intelligent Chunking
 When uploading a file to the cloud, the app automatically splits it into optimized segments (up to 1.9 GB for regular accounts, and up to 3.9 GB for Telegram Premium). This bypasses Telegram's message size limit and ensures robust transfer of files of any size.
 
