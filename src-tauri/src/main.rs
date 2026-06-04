@@ -183,6 +183,15 @@ fn main() {
                 Arc::clone(&session_manager),
             ));
             app.manage(Arc::clone(&mirror_manager));
+
+            // Automatically start all active mirror rules on startup
+            let mm_clone = Arc::clone(&mirror_manager);
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = mm_clone.start_all().await {
+                    log::error!("Failed to start active mirror rules: {}", e);
+                }
+            });
+
             
             let task_manager = Arc::new(crate::cluster::task_manager::TaskManager::new(
                 app.handle().clone(),
@@ -246,11 +255,30 @@ fn main() {
                 }
             });
 
-            // Start WebDAV server
+            // Start WebDAV server and perform auto-mounting if enabled
             let webdav_clone = Arc::clone(&webdav_bridge);
+            let cache_for_mount = Arc::clone(&metadata_cache);
             tauri::async_runtime::spawn(async move {
-                let _ = WebDavBridge::start(webdav_clone, 9876).await;
+                // Start WebDAV bridge
+                let server_clone = Arc::clone(&webdav_clone);
+                tauri::async_runtime::spawn(async move {
+                    let _ = WebDavBridge::start(server_clone, 9876).await;
+                });
+
+                // Let the server start up
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+                // Check mount setting and perform mount if enabled
+                let should_mount = cache_for_mount.get_setting("mount_drive").await
+                    .unwrap_or(Some("false".into()))
+                    .unwrap_or_else(|| "false".into()) == "true";
+
+                if should_mount {
+                    log::info!("Auto-mount: mount_drive setting is true, mounting drive...");
+                    let _ = crate::os_integration::mount_drive(9876, "Z:", None);
+                }
             });
+
 
             Ok(())
         })

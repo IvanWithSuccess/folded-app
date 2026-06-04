@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useAppStore } from '../../store/useAppStore';
 import { useFileExplorer } from '../../hooks/useFileExplorer';
 import { useFileActions } from '../../hooks/useFileActions';
@@ -42,6 +43,43 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [inspectItem, setInspectItem] = useState<SelectableItem | null>(null);
   const prevSyncing = useRef(false);
+  
+  const [openingFileIds, setOpeningFileIds] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let isMounted = true;
+
+    const setupListener = async () => {
+      try {
+        const unsub = await listen<{ file_id: string; file_name: string; processed_bytes: number; total_bytes: number }>('download-progress', (event) => {
+          if (!isMounted) return;
+          const { file_id, processed_bytes, total_bytes } = event.payload;
+          if (file_id) {
+            const progress = total_bytes > 0 ? Math.round((processed_bytes * 100) / total_bytes) : 0;
+            setOpeningFileIds(prev => ({
+              ...prev,
+              [file_id]: progress
+            }));
+          }
+        });
+        if (isMounted) {
+          unlisten = unsub;
+        } else {
+          unsub();
+        }
+      } catch (e) {
+        console.error('Failed to setup download listener in FileManager:', e);
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      isMounted = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   // Sorting state
   const [sortField, setSortField] = useState<'name' | 'date' | 'size'>('name');
@@ -238,6 +276,11 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
   const handleOpenFile = async (item: SelectableItem, colIdx: number, modeOverride?: 'system' | 'browser') => {
     if (isFolder(item)) return;
     
+    if (openingFileIds[item.id] !== undefined) {
+      console.log('File is already opening:', item.name);
+      return;
+    }
+    
     const mode = modeOverride || defaultOpenMode;
     
     if (mode === 'browser') {
@@ -254,11 +297,18 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
     } else {
       // System opening
       try {
+        setOpeningFileIds(prev => ({ ...prev, [item.id]: 0 }));
         const tmpPath = await invoke<string>('cluster_download_to_tmp', { fileId: item.id });
         await invoke('open_system_file', { path: tmpPath });
       } catch (e) {
         console.error('Open failed:', getErrorMessage(e));
         alert('Failed to open file: ' + getErrorMessage(e));
+      } finally {
+        setOpeningFileIds(prev => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
+        });
       }
     }
   };
@@ -442,6 +492,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
                   onDragOver={(e, item) => explorer.setDropTarget(item?.id || explorer.path[idx] || null)}
                   onDragLeave={() => explorer.setDropTarget(null)}
                   onDrop={handleDrop}
+                  openingFileIds={openingFileIds}
                 />
               ))
             ) : sortedColumns.length > 0 && explorer.path.length > 0 ? (
@@ -458,6 +509,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ category }) => {
                 onDragOver={(e, item, colIdx) => explorer.setDropTarget(item?.id || explorer.path[colIdx] || null)}
                 onDragLeave={() => explorer.setDropTarget(null)}
                 onDrop={handleDrop} 
+                openingFileIds={openingFileIds}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center">

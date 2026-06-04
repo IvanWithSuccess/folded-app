@@ -19,6 +19,7 @@ use tokio::sync::Mutex as TokioMutex;
 pub struct ClusterOrchestrator {
     pub(crate) semaphore: Arc<Semaphore>,
     pub(crate) active_ops: Arc<TokioMutex<HashSet<String>>>,
+    pub(crate) active_downloads: Arc<TokioMutex<std::collections::HashMap<String, Arc<tokio::sync::Notify>>>>,
 }
 
 impl std::fmt::Debug for ClusterOrchestrator {
@@ -38,6 +39,7 @@ impl ClusterOrchestrator {
         Self {
             semaphore: Arc::new(Semaphore::new(3)),
             active_ops: Arc::new(TokioMutex::new(HashSet::new())),
+            active_downloads: Arc::new(TokioMutex::new(std::collections::HashMap::new())),
         }
     }
 }

@@ -48,27 +48,101 @@ pub async fn cluster_download_to_tmp(
     let manifest = cache_state.get_file_by_id(&file_id).await.map_err(|e| e.to_string())?
         .ok_or_else(|| format!("File {} not found", file_id))?;
 
+    // 1. Check if the file is already cached and exists with the correct size on disk
+    if let Some(cached_path) = cache_state.get_cached_file(&file_id).await {
+        let path = std::path::PathBuf::from(&cached_path);
+        if path.exists() {
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                if metadata.len() == manifest.total_size {
+                    log::info!("File {} found in cache, skipping download: {:?}", file_id, path);
+                    return Ok(cached_path);
+                }
+            }
+        }
+    }
+
     let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_else(|_| "/tmp".into());
     let tmp_dir = std::path::PathBuf::from(home).join(".folded").join("tmp");
     let _ = std::fs::create_dir_all(&tmp_dir);
     let dest = tmp_dir.join(&manifest.name);
 
-    match cluster_state
-        .download_file(manifest.clone(), dest.clone(), Arc::clone(&session_state), Some(app), None)
-        .await {
-            Ok(_) => {
+    // 2. Also check if it exists at the destination path with correct size
+    if dest.exists() {
+        if let Ok(metadata) = std::fs::metadata(&dest) {
+            if metadata.len() == manifest.total_size {
+                log::info!("File {} already exists in temp directory with correct size, skipping download: {:?}", file_id, dest);
                 let _ = cache_state.record_cached_file(&manifest.id, &dest.to_string_lossy(), manifest.total_size).await;
-                Ok(dest.to_string_lossy().to_string())
-            },
-            Err(e) => {
-                let err_msg = e.to_string();
-                if err_msg.contains("not found") || err_msg.contains("no media") {
-                    log::warn!("File {} missing in Telegram during tmp open, removing from metadata.", file_id);
-                    let _ = cache_state.delete_file(&file_id).await;
-                }
-                Err(err_msg)
+                return Ok(dest.to_string_lossy().to_string());
             }
         }
+    }
+
+    // Coordinate concurrent downloads
+    let notify_opt = {
+        let mut active = cluster_state.active_downloads.lock().await;
+        if let Some(notify) = active.get(&file_id) {
+            Some(Arc::clone(notify))
+        } else {
+            let notify = Arc::new(tokio::sync::Notify::new());
+            active.insert(file_id.clone(), Arc::clone(&notify));
+            None
+        }
+    };
+
+    if let Some(notify) = notify_opt {
+        log::info!("File {} is already downloading in another thread, waiting...", file_id);
+        notify.notified().await;
+        
+        // After waking up, verify if it was successfully downloaded and cached
+        if let Some(cached_path) = cache_state.get_cached_file(&file_id).await {
+            let path = std::path::PathBuf::from(&cached_path);
+            if path.exists() {
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    if metadata.len() == manifest.total_size {
+                        log::info!("File {} was downloaded by another thread, using cached path: {:?}", file_id, path);
+                        return Ok(cached_path);
+                    }
+                }
+            }
+        }
+        if dest.exists() {
+            if let Ok(metadata) = std::fs::metadata(&dest) {
+                if metadata.len() == manifest.total_size {
+                    log::info!("File {} was downloaded by another thread, using dest path: {:?}", file_id, dest);
+                    let _ = cache_state.record_cached_file(&manifest.id, &dest.to_string_lossy(), manifest.total_size).await;
+                    return Ok(dest.to_string_lossy().to_string());
+                }
+            }
+        }
+        return Err("Download failed in concurrent task".to_string());
+    }
+
+    let download_result = cluster_state
+        .download_file(manifest.clone(), dest.clone(), Arc::clone(&session_state), Some(app), None)
+        .await;
+
+    // Remove file_id from active_downloads and notify any waiters
+    {
+        let mut active = cluster_state.active_downloads.lock().await;
+        if let Some(notify) = active.remove(&file_id) {
+            notify.notify_waiters();
+        }
+    }
+
+    match download_result {
+        Ok(_) => {
+            let _ = cache_state.record_cached_file(&manifest.id, &dest.to_string_lossy(), manifest.total_size).await;
+            Ok(dest.to_string_lossy().to_string())
+        },
+        Err(e) => {
+            let err_msg = e.to_string();
+            if err_msg.contains("not found") || err_msg.contains("no media") {
+                log::warn!("File {} missing in Telegram during tmp open, removing from metadata.", file_id);
+                let _ = cache_state.delete_file(&file_id).await;
+            }
+            Err(err_msg)
+        }
+    }
 }
 
 #[tauri::command]

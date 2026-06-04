@@ -300,7 +300,8 @@ impl ClusterOrchestrator {
                         file_name = format!("{}_{}.{}", prefix, msg.id(), extension);
                     }
 
-                    if !file_name.starts_with("chunk_") && !file_name.ends_with(".dat") && !is_manifest {
+                    let is_metadata = file_name.starts_with("._") || file_name == ".DS_Store" || file_name == "Thumbs.db";
+                    if !file_name.starts_with("chunk_") && !file_name.ends_with(".dat") && !is_manifest && !is_metadata {
                         let file_id = format!("ext_{}_{}", account_id, msg.id());
                         attachment_ids.push(file_id.clone());
                         let manifest = FileManifest {

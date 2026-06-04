@@ -16,6 +16,7 @@ interface FileItemProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
+  openingProgress?: number;
 }
 
 export const FileItem: React.FC<FileItemProps> = ({
@@ -30,17 +31,21 @@ export const FileItem: React.FC<FileItemProps> = ({
   onDragStart,
   onDragOver,
   onDragLeave,
-  onDrop
+  onDrop,
+  openingProgress
 }) => {
   const isFolderItem = isFolder(item);
   
   const getIcon = () => {
+    if (openingProgress !== undefined) {
+      return <RefreshCw size={16} className="text-blue-500 animate-spin" />;
+    }
     if (isFolderItem) return <Folder size={16} className={isSelected ? 'text-white' : 'text-zinc-500'} fill={isSelected ? 'white' : 'transparent'} />;
     
     // File icon based on extension
     const name = item.name.toLowerCase();
     if (name.match(/\.(jpg|jpeg|png|gif|webp)$/)) return <FileImage size={16} className={isSelected ? 'text-white' : 'text-blue-400'} />;
-    if (name.match(/\.(mp4|webm|mov)$/)) return <FileVideo size={16} className={isSelected ? 'text-white' : 'text-purple-400'} />;
+    if (name.match(/\.(mp4|webm|mov)$/)) return <FileVideo size={16} className={isSelected ? 'text-purple-400' : 'text-purple-400'} />;
     if (name.match(/\.(txt|md|doc|pdf)$/)) return <FileText size={16} className={isSelected ? 'text-white' : 'text-zinc-400'} />;
     
     return <File size={16} className={isSelected ? 'text-white' : 'text-zinc-500'} />;
@@ -61,6 +66,7 @@ export const FileItem: React.FC<FileItemProps> = ({
         ${isSelected ? 'bg-white shadow-lg z-10' : 'hover:bg-zinc-800/30'}
         ${isDragTarget ? 'bg-blue-500/20 ring-2 ring-blue-500 ring-inset' : ''}
         ${isPendingMove ? 'opacity-40' : 'opacity-100'}
+        ${openingProgress !== undefined ? 'bg-blue-500/5 pointer-events-none' : ''}
       `}
     >
       <div className="shrink-0">
@@ -69,7 +75,7 @@ export const FileItem: React.FC<FileItemProps> = ({
       
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center gap-2 overflow-hidden">
-          <span className={`text-[12px] font-medium truncate ${isSelected ? 'text-black' : 'text-zinc-300'}`}>
+          <span className={`text-[12px] font-medium truncate ${isSelected ? 'text-black' : 'text-zinc-300'} ${openingProgress !== undefined ? 'text-blue-400' : ''}`}>
             {item.name}
           </span>
           {item.is_managed && (
@@ -80,8 +86,10 @@ export const FileItem: React.FC<FileItemProps> = ({
           )}
         </div>
         {!isFolderItem && (
-          <span className={`text-[9px] font-bold uppercase tracking-tighter ${isSelected ? 'text-zinc-600' : 'text-zinc-600'}`}>
-            {formatBytes((item as FileManifest).total_size)}
+          <span className={`text-[9px] font-bold uppercase tracking-tighter ${openingProgress !== undefined ? 'text-blue-400' : 'text-zinc-600'}`}>
+            {openingProgress !== undefined 
+              ? `Loading: ${openingProgress}%` 
+              : formatBytes((item as FileManifest).total_size)}
           </span>
         )}
       </div>
@@ -94,6 +102,16 @@ export const FileItem: React.FC<FileItemProps> = ({
       {isPendingMove && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[8px] font-black uppercase tracking-widest border border-zinc-700">
           In Transit
+        </div>
+      )}
+
+      {/* Opening/Downloading progress bar */}
+      {openingProgress !== undefined && (
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-zinc-800/40">
+          <div 
+            className="h-full bg-blue-500 transition-all duration-150" 
+            style={{ width: `${Math.max(5, openingProgress)}%` }} 
+          />
         </div>
       )}
     </div>

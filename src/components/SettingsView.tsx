@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   closeToTray: true,
   showTrayIcon: true,
   launchOnStartup: false,
-  mountDrive: true,
+  mountDrive: false,
   defaultOpenMode: 'system',
   cacheMaxMb: '1024', // 1 GB default
   parallelWorkers: '3',
@@ -67,7 +67,7 @@ export const SettingsView: React.FC = () => {
       const ctTray = await getSet('close_to_tray', 'true');
       const stIcon = await getSet('show_tray_icon', 'true');
       const startOnBoot = await getSet('launch_on_startup', 'false');
-      const shouldMount = await getSet('mount_drive', 'true');
+      const shouldMount = await getSet('mount_drive', 'false');
       const openMode = await getSet('default_open_mode', 'system') as 'system' | 'browser';
       const cMaxMb = await getSet('cache_max_mb', '1024');
       const pWorkers = await getSet('parallel_workers', '3');

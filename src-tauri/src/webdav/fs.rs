@@ -104,12 +104,38 @@ impl ClusterFs {
 impl DavFileSystem for ClusterFs {
     fn open<'a>(&'a self, path: &'a DavPath, options: OpenOptions) -> FsFuture<'a, Box<dyn DavFile>> {
         async move {
-            let entry = self.resolve_path(path).await?;
+            let entry_result = self.resolve_path(path).await;
 
-            match entry {
-                VirtualEntry::File(manifest) => {
+            match entry_result {
+                Ok(VirtualEntry::File(manifest)) => {
                     if options.write {
-                        // Support for overwriting files could be added here, but for now we follow the existing UploadDavFile logic which is mostly for new creations
+                        if options.truncate || options.create {
+                            self.orchestrator.delete_file(manifest.clone(), Arc::clone(&self.session_manager))
+                                .await.map_err(|_| FsError::GeneralFailure)?;
+                            self.cache.delete_file(&manifest.id)
+                                .await.map_err(|_| FsError::GeneralFailure)?;
+
+                            let name = path.file_name().ok_or(FsError::GeneralFailure)?;
+                            let temp_path = self.tmp_dir.join(name);
+                            let std_file = tokio::fs::OpenOptions::new()
+                                .write(true)
+                                .create(true)
+                                .truncate(true)
+                                .open(&temp_path).await
+                                .map_err(|_| FsError::GeneralFailure)?;
+
+                            let upload_file = UploadDavFile {
+                                name: name.to_string(),
+                                temp_path,
+                                file: std_file,
+                                orchestrator: Arc::clone(&self.orchestrator),
+                                session_manager: Arc::clone(&self.session_manager),
+                                cache: Arc::clone(&self.cache),
+                                account_id: manifest.account_id.clone().unwrap_or_default(),
+                                folder_id: manifest.folder_id,
+                            };
+                            return Ok(Box::new(upload_file) as Box<dyn DavFile>);
+                        }
                         return Err(FsError::Forbidden);
                     }
                     
@@ -123,17 +149,22 @@ impl DavFileSystem for ClusterFs {
                     };
                     Ok(Box::new(file) as Box<dyn DavFile>)
                 }
-                VirtualEntry::Root | VirtualEntry::AccountRoot(_) | VirtualEntry::Folder(_) => {
-                    // For creating NEW files in a directory
+                Ok(VirtualEntry::Root) | Ok(VirtualEntry::AccountRoot(_)) | Ok(VirtualEntry::Folder(_)) => {
+                    Err(FsError::Forbidden)
+                }
+                Err(FsError::NotFound) => {
                     if options.create || options.create_new {
+                        let parent_path = path.parent();
+                        let parent_entry = self.resolve_path(&parent_path).await?;
                         let name = path.file_name().ok_or(FsError::GeneralFailure)?;
-                        let account_id = match &entry {
+                        
+                        let account_id = match &parent_entry {
                             VirtualEntry::AccountRoot(acc) => acc.id.clone(),
                             VirtualEntry::Folder(f) => f.account_id.clone().unwrap_or_default(),
                             _ => return Err(FsError::Forbidden), // Cannot create file at root
                         };
                         
-                        let folder_id = match entry {
+                        let folder_id = match parent_entry {
                             VirtualEntry::Folder(f) => Some(f.id),
                             _ => None,
                         };
@@ -156,10 +187,12 @@ impl DavFileSystem for ClusterFs {
                             account_id,
                             folder_id,
                         };
-                        return Ok(Box::new(upload_file) as Box<dyn DavFile>);
+                        Ok(Box::new(upload_file) as Box<dyn DavFile>)
+                    } else {
+                        Err(FsError::NotFound)
                     }
-                    Err(FsError::Forbidden)
                 }
+                Err(e) => Err(e)
             }
         }.boxed()
     }
@@ -530,6 +563,13 @@ impl DavFile for UploadDavFile {
             use tokio::io::AsyncWriteExt;
             self.file.flush().await.map_err(|_| FsError::GeneralFailure)?;
             
+            // Skip uploading metadata/system files
+            if name.starts_with("._") || name == ".DS_Store" || name == "Thumbs.db" {
+                log::info!("WebDAV [FLUSH_SKIP]: Skipping upload to Telegram for system metadata file: {}", name);
+                let _ = tokio::fs::remove_file(temp_path).await;
+                return Ok(());
+            }
+
             // Wait for the actual upload to Telegram before telling the OS we are done
             let manifest = orchestrator.upload_file(temp_path.clone(), session_manager, Arc::clone(&cache), name, None, fid, aid, None, None)
                 .await.map_err(|_| FsError::GeneralFailure)?;

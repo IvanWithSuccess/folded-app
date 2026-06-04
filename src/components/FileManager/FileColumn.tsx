@@ -17,6 +17,7 @@ interface FileColumnProps {
   onDragOver: (e: React.DragEvent, item: SelectableItem | null, columnIdx: number) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, item: SelectableItem | null, columnIdx: number) => void;
+  openingFileIds?: Record<string, number>;
 }
 
 export const FileColumn: React.FC<FileColumnProps> = ({
@@ -32,7 +33,8 @@ export const FileColumn: React.FC<FileColumnProps> = ({
   onDragStart,
   onDragOver,
   onDragLeave,
-  onDrop
+  onDrop,
+  openingFileIds
 }) => {
   const currentPathId = path[columnIdx];
 
@@ -84,6 +86,7 @@ export const FileColumn: React.FC<FileColumnProps> = ({
               onDragOver={(e) => onDragOver(e, file, columnIdx)}
               onDragLeave={onDragLeave}
               onDrop={(e) => onDrop(e, file, columnIdx)}
+              openingProgress={openingFileIds?.[file.id]}
             />
           ))}
         </div>

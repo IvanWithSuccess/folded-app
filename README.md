@@ -6,113 +6,113 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS-blue?logo=apple&logoColor=white)](#)
 
-**Folded Cloud** — это высокопроизводительное нативное приложение для macOS, превращающее ваши Telegram-аккаунты в единый распределенный кластер безлимитного облачного хранилища с глубокой интеграцией в операционную систему.
+**Folded Cloud** is a high-performance native macOS application that turns your Telegram accounts into a unified, distributed cluster of unlimited cloud storage with deep operating system integration.
 
-Приложение позволяет монтировать облако как виртуальный жесткий диск, обеспечивая мгновенный доступ к файлам и медиапотокам напрямую через стандартный проводник ОС (Finder) без предварительной полной загрузки файлов на устройство.
+The app allows you to mount your storage as a virtual network drive, providing instant read/write access to files and media streams directly through the native macOS Finder, without requiring you to pre-download files to your local machine.
 
 ---
 
-## ⚙️ Как это устроено и работает
+## ⚙️ How It Works
 
-Система построена на принципах локального индексирования и потоковой передачи данных по требованию (On-Demand Streaming):
+The system is built on the principles of local metadata indexing and on-demand data streaming:
 
 ```mermaid
 graph TD
-    User([Пользователь / OS Finder]) -->|Запросы файлов / чтение| WD[WebDAV Bridge (Axum)]
-    WD -->|Поиск путей и чанков| DB[(Локальная БД SQLite)]
-    WD -->|Range Requests (запрос смещений)| MT[Клиент MTProto (Grammers)]
-    MT -->|Скачивание чанков| TG[Серверы Telegram]
+    User([User / OS Finder]) -->|File Requests / Read & Write| WD[WebDAV Bridge (Axum)]
+    WD -->|Find Paths & Chunks| DB[(Local SQLite DB)]
+    WD -->|Range Requests / Offsets| MT[MTProto Client (Grammers)]
+    MT -->|Download/Upload Chunks| TG[Telegram Servers]
     
-    Crawler[Фоновый Синхронизатор] -->|Рекурсивный обход Saved Messages| TG
-    Crawler -->|Запись метаданных| DB
+    Crawler[Background Synchronizer] -->|Recursive Saved Messages Scan| TG
+    Crawler -->|Save Metadata| DB
 ```
 
-### 1. Умная сегментация (Intelligent Chunking)
-При отправке файла в облако приложение автоматически разбивает его на оптимизированные блоки (до 1.9 ГБ для обычных аккаунтов и до 3.9 ГБ для Telegram Premium). Это обходит встроенные ограничения платформы Telegram на максимальный размер сообщения и гарантирует безотказную передачу файлов любого размера.
+### 1. Intelligent Chunking
+When uploading a file to the cloud, the app automatically splits it into optimized segments (up to 1.9 GB for regular accounts, and up to 3.9 GB for Telegram Premium). This bypasses Telegram's message size limit and ensures robust transfer of files of any size.
 
-### 2. Локальный мета-индекс (SQLite)
-Все виртуальное дерево каталогов, структура папок и связи между файлами и сообщениями в Telegram кэшируются на вашем компьютере в локальной базе данных SQLite. Поиск, сортировка и навигация по структуре диска происходят мгновенно, так как не требуют постоянных запросов к API Telegram.
+### 2. Local Meta-Index (SQLite)
+Your entire directory structure, folders, and links between files and Telegram messages are cached locally in a SQLite database. Finding, sorting, and browsing your files is instantaneous since it requires no constant requests to the Telegram API.
 
-### 3. Виртуальный диск и стриминг (WebDAV Bridge)
-Встроенный WebDAV-сервер эмулирует сетевую файловую систему. Когда вы запускаете видео или открываете документ в Finder:
-* Операционная система посылает стандартный HTTP Range-запрос к локальному мосту.
-* Мост определяет, в каких сообщениях Telegram лежат нужные сегменты данных.
-* Клиент делает точечный запрос смещения (Range-запрос) напрямую к серверам Telegram по протоколу MTProto.
-* Данные стримятся в проигрыватель или приложение "на лету" — вы можете мгновенно перематывать 4K видеоролики без ожидания скачивания всего файла.
-
----
-
-## 🌟 Основные возможности
-
-* **🚀 Мультиаккаунт-кластер**: Возможность объединить несколько разных Telegram-аккаунтов в единый массив памяти. Каждый аккаунт выступает в роли независимой ноды хранения.
-* **📡 Потоковая передача**: Проигрывание медиафайлов, открытие документов и просмотр изображений без скачивания на локальный диск.
-* **🔄 Автономный фоновый краулер**: Рекурсивный фоновый индексер, автоматически сканирующий выбранные чаты и "Избранное", поддерживая структуру файлов в актуальном состоянии.
-* **📝 Встроенные заметки (Cloud Notes)**: Текстовый редактор с поддержкой прикрепления файлов из вашего облака, сохраняющий данные в облаке Telegram.
-* **🖥️ Системный трей**: Работает в фоновом режиме как служба (Daemon) — WebDAV-мост остается активным, даже если графический интерфейс приложения закрыт.
+### 3. Virtual Drive & Streaming (WebDAV Bridge)
+An embedded WebDAV server emulates a network file system. When you play a video or open a document in Finder:
+* The OS sends standard HTTP Range requests to the local bridge.
+* The bridge maps the requested byte offsets to specific Telegram messages and chunks.
+* The MTProto client requests the precise range directly from Telegram servers.
+* Data streams on-the-fly, allowing you to play 4K video or skip around media instantly without downloading the whole file.
 
 ---
 
-## 🛠️ Стек технологий
+## 🌟 Key Features
+
+* **🚀 Multi-account Cluster**: Merge multiple Telegram accounts into a single storage array. Each account acts as an independent storage node.
+* **📤 WebDAV R/W Integration**: Mount the cloud as a local network drive with full read and write capabilities, allowing you to drag-and-drop files directly in Finder to upload them.
+* **📡 On-Demand Streaming**: Play media, open documents, and view images without downloading them to your local disk first.
+* **🔄 Autonomous Background Crawler**: A background worker scans your selected chats and "Saved Messages" to index newly found files automatically.
+* **📝 Cloud Notes**: Text editor with file attachment support, storing notes directly on Telegram.
+* **🖥️ System Tray Integration**: Runs as a background daemon, keeping the WebDAV bridge active even when the main app window is closed.
+
+---
+
+## 🛠️ Tech Stack
 
 ### Rust (Backend / Core Engine)
-* **Tauri v2**: Легковесная и безопасная альтернатива Electron для отрисовки графического интерфейса и интеграции с ОС.
-* **Grammers**: Высокопроизводительный асинхронный клиент MTProto для прямой низкоуровневой работы с серверами Telegram.
-* **SQLx + SQLite**: Локальное надежное хранилище метаданных с поддержкой транзакций и миграций БД.
-* **Axum**: Легковесный веб-фреймворк для реализации локального WebDAV-сервера.
+* **Tauri v2**: Lightweight and secure Electron alternative for the user interface and native OS integration.
+* **Grammers**: High-performance asynchronous MTProto client for low-level interaction with Telegram servers.
+* **SQLx + SQLite**: Secure and reliable local metadata storage with support for transactions and database migrations.
+* **Axum**: Lightweight web framework implementing the local WebDAV server.
 
 ### TypeScript / React (Frontend)
-* **React 18** + **Vite**: Сверхбыстрая сборка интерфейса и реактивное обновление компонентов.
-* **Tailwind CSS 4**: Современная система стилизации с переменными и высокой производительностью.
-* **Zustand**: Простое и предсказуемое управление глобальным состоянием интерфейса.
-* **Lucide React**: Набор лаконичных иконок для интерфейса в индустриальном стиле.
+* **React 18** + **Vite**: Ultra-fast UI build and reactive component updates.
+* **Tailwind CSS 4**: Modern styling system utilizing design tokens and CSS variables.
+* **Zustand**: Simple, lightweight state management.
+* **Lucide React**: Clean and modern developer-friendly icons.
 
 ---
 
-## 🚀 Установка и запуск
+## 🚀 Installation & Setup
 
-### Системные требования
-* **Rust**: `rustc` и `cargo` версии 1.75 или выше.
-* **Node.js**: Версия 18.0 или выше.
-* **OS**: macOS 12+ (протестировано на Apple Silicon и Intel).
+### System Requirements
+* **Rust**: `rustc` and `cargo` version 1.75 or higher.
+* **Node.js**: Version 18.0 or higher.
+* **OS**: macOS 12+ (tested on both Apple Silicon and Intel).
 
-### Пошаговое руководство
+### Step-by-Step Guide
 
-1. **Клонирование репозитория**:
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/IvanWithSuccess/folded-app.git
    cd folded-app
    ```
 
-2. **Установка зависимостей**:
+2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Запуск в режиме разработки**:
+3. **Run in development mode**:
    ```bash
    npx tauri dev
    ```
 
-4. **Сборка готового приложения для macOS**:
+4. **Build the production release**:
    ```bash
    npx tauri build
    ```
-   *Готовый дистрибутив `.dmg` или `.app` будет находиться в папке `src-tauri/target/release/bundle/`.*
+   *The built `.dmg` or `.app` bundle will be located in the `src-tauri/target/release/bundle/` directory.*
 
 ---
 
-## 🔒 Безопасность и конфиденциальность
+## 🔒 Security & Privacy
 
-Приложение проектировалось с фокусом на абсолютную приватность данных:
-* **Без серверов-посредников**: Все запросы идут напрямую с вашего устройства на серверы Telegram. Никакой аналитики или телеметрии на сторонние сервера.
-* **Локальное хранение сессий**: Авторизационные файлы сессий (`~/.folded/sessions/`) и локальная база данных файлов (`~/.folded/metadata_db.sqlite`) хранятся локально в вашей домашней директории и защищены правами доступа ОС.
-* **Шифрование сессий**: Все авторизационные ключи и токены защищаются встроенными механизмами шифрования протокола MTProto.
+Privacy was a core design priority:
+* **No Middlemen**: All API requests and file chunks go directly between your device and Telegram's servers. No third-party trackers or telemetry.
+* **Local Session Storage**: Auth sessions (`~/.folded/sessions/`) and your SQLite index database (`~/.folded/metadata_db.sqlite`) are stored entirely on your local machine, secured by OS file permissions.
+* **Session Encryption**: Authentication credentials and MTProto keys are fully protected by Telegram's native cryptographic protocols.
 
 ---
 
-## 🗺️ План развития (Roadmap)
+## 🗺️ Roadmap
 
-- [ ] **Поддержка записи через WebDAV (R/W)**: Возможность загружать файлы в облако простым перетаскиванием (Drag & Drop) в Finder.
-- [ ] **Сквозное шифрование (E2EE)**: Защита чанков "на лету" с использованием мастер-пароля (AES-256-GCM) перед загрузкой в Telegram.
-- [ ] **Поиск и OCR документов**: Индексация текстового содержимого внутри PDF/DOCX и распознавание текста на картинках.
-- [ ] **Mobile Companion**: Легкое мобильное веб-приложение для быстрого чтения документов и заметок на смартфонах.
+- [ ] **End-to-End Encryption (E2EE)**: Encrypt file chunks on-the-fly (AES-256-GCM) with a master password before uploading to Telegram.
+- [ ] **Full-Text Search & OCR**: Index document contents (PDF/DOCX) and extract text from images automatically.
+- [ ] **Mobile Companion**: Lightweight web companion app for quick access to your files and notes on mobile devices.

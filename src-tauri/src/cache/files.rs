@@ -5,6 +5,12 @@ use super::MetadataCache;
 
 impl MetadataCache {
     pub async fn save_file(&self, file: FileManifest) -> Result<()> {
+        let name = &file.name;
+        if name.starts_with("._") || name == ".DS_Store" || name == "Thumbs.db" {
+            log::info!("Cache [SAVE_FILE_SKIP]: Ignoring macOS metadata/system file: {}", name);
+            return Ok(());
+        }
+
         let mut tx = self.pool.begin().await?;
         
         // Check if the target folder exists before inserting to avoid FK violation

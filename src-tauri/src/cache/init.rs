@@ -43,8 +43,7 @@ impl MetadataCache {
             )"
         ).execute(&pool).await?;
 
-        // Drop and recreate chunks with new schema (chunk_id + size_bytes for resilient reassembly)
-        sqlx::query("DROP TABLE IF EXISTS chunks").execute(&pool).await?;
+        // Create chunks with schema (chunk_id + size_bytes for resilient reassembly)
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS chunks (
                 file_id TEXT NOT NULL,

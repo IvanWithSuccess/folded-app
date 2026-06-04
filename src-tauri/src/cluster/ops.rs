@@ -293,6 +293,8 @@ impl ClusterOrchestrator {
                 .ok_or_else(|| anyhow!("Missing chunk {} after download", i))?;
             file.write_all(&data).await?;
         }
+        file.flush().await?;
+        file.sync_all().await?;
 
         Ok(())
     }
