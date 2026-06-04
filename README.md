@@ -97,11 +97,3 @@ Privacy was a core design priority:
 * **No Middlemen**: All API requests and file chunks go directly between your device and Telegram's servers. No third-party trackers or telemetry.
 * **Local Session Storage**: Auth sessions (`~/.folded/sessions/`) and your SQLite index database (`~/.folded/metadata_db.sqlite`) are stored entirely on your local machine, secured by OS file permissions.
 * **Session Encryption**: Authentication credentials and MTProto keys are fully protected by Telegram's native cryptographic protocols.
-
----
-
-## 🗺️ Roadmap
-
-- [ ] **End-to-End Encryption (E2EE)**: Encrypt file chunks on-the-fly (AES-256-GCM) with a master password before uploading to Telegram.
-- [ ] **Full-Text Search & OCR**: Index document contents (PDF/DOCX) and extract text from images automatically.
-- [ ] **Mobile Companion**: Lightweight web companion app for quick access to your files and notes on mobile devices.
