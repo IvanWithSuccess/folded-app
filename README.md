@@ -1,78 +1,118 @@
 # 📂 Folded Cloud
 
-**Folded Cloud** is a professional, high-performance Telegram-based cloud storage application. It transforms your Telegram accounts into a unified, unlimited, and high-speed personal storage cluster with deep OS integration.
+[![Tauri](https://img.shields.io/badge/Tauri-v2-FFC107?logo=tauri&logoColor=white)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS-blue?logo=apple&logoColor=white)](#)
 
-![Folded Logo](Logo.png)
+**Folded Cloud** — это высокопроизводительное нативное приложение для macOS, превращающее ваши Telegram-аккаунты в единый распределенный кластер безлимитного облачного хранилища с глубокой интеграцией в операционную систему.
 
-## ✨ Key Features
+Приложение позволяет монтировать облако как виртуальный жесткий диск, обеспечивая мгновенный доступ к файлам и медиапотокам напрямую через стандартный проводник ОС (Finder) без предварительной полной загрузки файлов на устройство.
 
-- **🚀 Unified Storage Cluster**: Seamlessly combine multiple Telegram accounts into a single, massive storage pool.
-- **📦 Intelligent Chunking**: Automatically fragments large files (up to any size) into optimized chunks (1.9GB or 3.9GB for Premium) to bypass platform limits.
-- **📡 Instant Streaming (WebDAV)**: Stream 4K media and access massive files directly from Telegram servers via a virtual filesystem—no full download required.
-- **🖥️ Native OS Integration**: Mount your Folded Cloud as a real network drive on **macOS** and **Windows** for direct access via Finder or Explorer.
-- **🔄 Industrial Background Engine**: A high-efficiency Rust-based crawler that monitors and indexes "Saved Messages" in real-time.
-- **📝 Secure Notes**: Integrated note-taking system with cloud-synced attachments, protected by Telegram's infrastructure.
-- **🛡️ Privacy First**: All sessions, keys, and metadata are stored exclusively on your local machine in an encrypted-ready SQLite database.
-- **🎨 Industrial Aesthetics**: A high-end, dark-mode "Industrial Design" interface built for power users.
+---
 
-## 🛠️ Technology Stack
+## ⚙️ Как это устроено и работает
 
-- **Core**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://tauri.app/)
-- **Telegram Engine**: [Grammers](https://github.com/Lonami/grammers) (Asynchronous MTProto implementation)
-- **Data Persistence**: [SQLite](https://www.sqlite.org/) with [SQLx](https://github.com/launchbadge/sqlx)
-- **Frontend**: [React 18](https://reactjs.org/), [Vite](https://vitejs.dev/), [Tailwind CSS 4](https://tailwindcss.com/)
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
-- **Virtual Drive**: Custom WebDAV bridge for low-latency filesystem emulation.
+Система построена на принципах локального индексирования и потоковой передачи данных по требованию (On-Demand Streaming):
 
-## 🏗️ Architecture
+```mermaid
+graph TD
+    User([Пользователь / OS Finder]) -->|Запросы файлов / чтение| WD[WebDAV Bridge (Axum)]
+    WD -->|Поиск путей и чанков| DB[(Локальная БД SQLite)]
+    WD -->|Range Requests (запрос смещений)| MT[Клиент MTProto (Grammers)]
+    MT -->|Скачивание чанков| TG[Серверы Telegram]
+    
+    Crawler[Фоновый Синхронизатор] -->|Рекурсивный обход Saved Messages| TG
+    Crawler -->|Запись метаданных| DB
+```
 
-- **Metadata Engine**: A high-performance local indexer that maps virtual files to Telegram message nodes.
-- **Cluster Orchestrator**: Manages multi-account distribution, chunking logic, and reassembly.
-- **Session Manager**: Handles secure authentication, including 2FA and QR-based logins.
-- **WebDAV Bridge**: Translates OS filesystem calls into asynchronous Telegram API requests for on-demand data retrieval.
+### 1. Умная сегментация (Intelligent Chunking)
+При отправке файла в облако приложение автоматически разбивает его на оптимизированные блоки (до 1.9 ГБ для обычных аккаунтов и до 3.9 ГБ для Telegram Premium). Это обходит встроенные ограничения платформы Telegram на максимальный размер сообщения и гарантирует безотказную передачу файлов любого размера.
 
-## 🚀 Getting Started
+### 2. Локальный мета-индекс (SQLite)
+Все виртуальное дерево каталогов, структура папок и связи между файлами и сообщениями в Telegram кэшируются на вашем компьютере в локальной базе данных SQLite. Поиск, сортировка и навигация по структуре диска происходят мгновенно, так как не требуют постоянных запросов к API Telegram.
 
-### Prerequisites
+### 3. Виртуальный диск и стриминг (WebDAV Bridge)
+Встроенный WebDAV-сервер эмулирует сетевую файловую систему. Когда вы запускаете видео или открываете документ в Finder:
+* Операционная система посылает стандартный HTTP Range-запрос к локальному мосту.
+* Мост определяет, в каких сообщениях Telegram лежат нужные сегменты данных.
+* Клиент делает точечный запрос смещения (Range-запрос) напрямую к серверам Telegram по протоколу MTProto.
+* Данные стримятся в проигрыватель или приложение "на лету" — вы можете мгновенно перематывать 4K видеоролики без ожидания скачивания всего файла.
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-- [Node.js](https://nodejs.org/) (v18+)
-- [Tauri CLI](https://tauri.app/v2/guides/getting-started/prerequisites/) (`cargo install tauri-cli`)
+---
 
-### Installation
+## 🌟 Основные возможности
 
-1. **Clone the repository**:
+* **🚀 Мультиаккаунт-кластер**: Возможность объединить несколько разных Telegram-аккаунтов в единый массив памяти. Каждый аккаунт выступает в роли независимой ноды хранения.
+* **📡 Потоковая передача**: Проигрывание медиафайлов, открытие документов и просмотр изображений без скачивания на локальный диск.
+* **🔄 Автономный фоновый краулер**: Рекурсивный фоновый индексер, автоматически сканирующий выбранные чаты и "Избранное", поддерживая структуру файлов в актуальном состоянии.
+* **📝 Встроенные заметки (Cloud Notes)**: Текстовый редактор с поддержкой прикрепления файлов из вашего облака, сохраняющий данные в облаке Telegram.
+* **🖥️ Системный трей**: Работает в фоновом режиме как служба (Daemon) — WebDAV-мост остается активным, даже если графический интерфейс приложения закрыт.
+
+---
+
+## 🛠️ Стек технологий
+
+### Rust (Backend / Core Engine)
+* **Tauri v2**: Легковесная и безопасная альтернатива Electron для отрисовки графического интерфейса и интеграции с ОС.
+* **Grammers**: Высокопроизводительный асинхронный клиент MTProto для прямой низкоуровневой работы с серверами Telegram.
+* **SQLx + SQLite**: Локальное надежное хранилище метаданных с поддержкой транзакций и миграций БД.
+* **Axum**: Легковесный веб-фреймворк для реализации локального WebDAV-сервера.
+
+### TypeScript / React (Frontend)
+* **React 18** + **Vite**: Сверхбыстрая сборка интерфейса и реактивное обновление компонентов.
+* **Tailwind CSS 4**: Современная система стилизации с переменными и высокой производительностью.
+* **Zustand**: Простое и предсказуемое управление глобальным состоянием интерфейса.
+* **Lucide React**: Набор лаконичных иконок для интерфейса в индустриальном стиле.
+
+---
+
+## 🚀 Установка и запуск
+
+### Системные требования
+* **Rust**: `rustc` и `cargo` версии 1.75 или выше.
+* **Node.js**: Версия 18.0 или выше.
+* **OS**: macOS 12+ (протестировано на Apple Silicon и Intel).
+
+### Пошаговое руководство
+
+1. **Клонирование репозитория**:
    ```bash
-   git clone https://github.com/your-repo/folded.git
-   cd folded
+   git clone https://github.com/IvanWithSuccess/folded-app.git
+   cd folded-app
    ```
 
-2. **Install dependencies**:
+2. **Установка зависимостей**:
    ```bash
    npm install
    ```
 
-3. **Run in development mode**:
+3. **Запуск в режиме разработки**:
    ```bash
-   npm run tauri dev
+   npx tauri dev
    ```
 
-4. **Build for production**:
+4. **Сборка готового приложения для macOS**:
    ```bash
-   npm run tauri build
+   npx tauri build
    ```
-
-## 🔒 Security & Privacy
-
-Folded Cloud is built on the principle of local-first data.
-- **No External Servers**: The app communicates directly with Telegram servers.
-- **Local Credentials**: Session files (`~/.folded/sessions/`) and your file index (`~/.folded/metadata_db.sqlite`) never leave your device.
-- **Open Protocol**: Uses standard WebDAV for local OS mounting.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+   *Готовый дистрибутив `.dmg` или `.app` будет находиться в папке `src-tauri/target/release/bundle/`.*
 
 ---
 
-Built with 🦀 and ⚛️ for the open web.
+## 🔒 Безопасность и конфиденциальность
+
+Приложение проектировалось с фокусом на абсолютную приватность данных:
+* **Без серверов-посредников**: Все запросы идут напрямую с вашего устройства на серверы Telegram. Никакой аналитики или телеметрии на сторонние сервера.
+* **Локальное хранение сессий**: Авторизационные файлы сессий (`~/.folded/sessions/`) и локальная база данных файлов (`~/.folded/metadata_db.sqlite`) хранятся локально в вашей домашней директории и защищены правами доступа ОС.
+* **Шифрование сессий**: Все авторизационные ключи и токены защищаются встроенными механизмами шифрования протокола MTProto.
+
+---
+
+## 🗺️ План развития (Roadmap)
+
+- [ ] **Поддержка записи через WebDAV (R/W)**: Возможность загружать файлы в облако простым перетаскиванием (Drag & Drop) в Finder.
+- [ ] **Сквозное шифрование (E2EE)**: Защита чанков "на лету" с использованием мастер-пароля (AES-256-GCM) перед загрузкой в Telegram.
+- [ ] **Поиск и OCR документов**: Индексация текстового содержимого внутри PDF/DOCX и распознавание текста на картинках.
+- [ ] **Mobile Companion**: Легкое мобильное веб-приложение для быстрого чтения документов и заметок на смартфонах.
