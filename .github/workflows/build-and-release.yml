@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   publish-tauri:
-    runs-on: macos-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
-          releaseName: 'Folded Cloud v__VERSION__'
-          releaseBody: 'Automatic build from GitHub Actions.'
+          releaseName: 'Folded Cloud Windows v__VERSION__'
+          releaseBody: 'Automatic Windows build from GitHub Actions.'
           releaseDraft: false
           prerelease: false
