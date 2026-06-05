@@ -8,13 +8,23 @@ use grammers_client::media::Media;
 use grammers_client::message::InputMessage;
 use tauri::Manager;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+fn create_cmd(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    cmd
+}
+
 #[tauri::command]
 pub async fn open_system_file(path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     std::process::Command::new("open").arg(&path).spawn().map_err(|e| e.to_string())?;
     
     #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd").args(["/C", "start", "", &path]).spawn().map_err(|e| e.to_string())?;
+    create_cmd("cmd").args(["/C", "start", "", &path]).spawn().map_err(|e| e.to_string())?;
     
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open").arg(&path).spawn().map_err(|e| e.to_string())?;
@@ -259,7 +269,7 @@ pub async fn create_alias(source_path: String, destination_folder: String) -> Re
             destination_lnk.to_string_lossy().replace('\'', "''"),
             target_path.replace('\'', "''")
         );
-        let _ = std::process::Command::new("powershell")
+        let _ = create_cmd("powershell")
             .args(["-NoProfile", "-Command", &script])
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -339,7 +349,12 @@ pub async fn get_system_report() -> Result<serde_json::Value, String> {
     let log_path = app_data_dir.join("app.log");
     
     let run_cmd = |cmd: &str, args: &[&str]| -> String {
-        std::process::Command::new(cmd)
+        #[cfg(target_os = "windows")]
+        let mut command = create_cmd(cmd);
+        #[cfg(not(target_os = "windows"))]
+        let mut command = std::process::Command::new(cmd);
+        
+        command
             .args(args)
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
