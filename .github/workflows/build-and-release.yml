@@ -35,7 +35,7 @@ jobs:
       - name: Install Rust stable
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          targets: ${{ matrix.settings.target }}
+          target: ${{ matrix.settings.target }}
 
       - name: Install frontend dependencies
         run: npm install
