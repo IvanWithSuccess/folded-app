@@ -107,7 +107,7 @@ pub async fn download_file_version(
         .map_err(|e| e.to_string())?
         .ok_or("Version not found".to_string())?;
 
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_default();
     let downloads = if !home.is_empty() {
         std::path::PathBuf::from(home).join("Downloads")
     } else {

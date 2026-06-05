@@ -240,7 +240,32 @@ pub async fn create_alias(source_path: String, destination_folder: String) -> Re
         let _ = std::process::Command::new("osascript").args(["-e", &script]).spawn().map_err(|e| e.to_string())?;
     }
     
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        // On Windows, the WebDAV drive is mounted as Z: by default.
+        // If the source_path is a local path (like C:\Users\...\FoldedCloud), we point it to the mounted Z:\ drive instead.
+        let target_path = if source_path.contains("FoldedCloud") {
+            "Z:\\".to_string()
+        } else {
+            source_path
+        };
+        
+        let destination_lnk = std::path::Path::new(&destination_folder).join("FoldedCloud.lnk");
+        let script = format!(
+            "$WshShell = New-Object -ComObject WScript.Shell; \
+             $Shortcut = $WshShell.CreateShortcut('{}'); \
+             $Shortcut.TargetPath = '{}'; \
+             $Shortcut.Save()",
+            destination_lnk.to_string_lossy().replace('\'', "''"),
+            target_path.replace('\'', "''")
+        );
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (source_path, destination_folder);
     }
@@ -250,7 +275,9 @@ pub async fn create_alias(source_path: String, destination_folder: String) -> Re
 
 #[tauri::command]
 pub async fn get_home_dir() -> Result<String, String> {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| "/tmp".into());
     Ok(home)
 }
 
@@ -319,9 +346,26 @@ pub async fn get_system_report() -> Result<serde_json::Value, String> {
             .unwrap_or_else(|_| "Unknown".to_string())
     };
 
+    #[cfg(target_os = "macos")]
     let device_model = run_cmd("sysctl", &["-n", "hw.model"]);
+    #[cfg(target_os = "macos")]
     let os_name = run_cmd("sw_vers", &["-productName"]);
+    #[cfg(target_os = "macos")]
     let os_version = run_cmd("sw_vers", &["-productVersion"]);
+
+    #[cfg(target_os = "windows")]
+    let device_model = run_cmd("powershell", &["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Model"]);
+    #[cfg(target_os = "windows")]
+    let os_name = "Windows".to_string();
+    #[cfg(target_os = "windows")]
+    let os_version = run_cmd("powershell", &["-NoProfile", "-Command", "(Get-CimInstance Win32_OperatingSystem).Caption + ' ' + (Get-CimInstance Win32_OperatingSystem).Version"]);
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let device_model = "Unknown".to_string();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let os_name = std::env::consts::OS.to_string();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let os_version = "Unknown".to_string();
     let arch = std::env::consts::ARCH;
     let app_version = env!("CARGO_PKG_VERSION");
     let local_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();

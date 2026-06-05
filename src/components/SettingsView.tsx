@@ -356,7 +356,7 @@ ${report.logs}
               <div className="flex items-center justify-between gap-8">
                  <div className="flex flex-col">
                     <span className="text-[11px] font-bold text-foreground uppercase tracking-tight">Expose Virtual Volume</span>
-                    <span className="text-[10px] text-zinc-500 font-medium mt-0.5">Mount cloud storage as a native macOS drive.</span>
+                    <span className="text-[10px] text-zinc-500 font-medium mt-0.5">Mount cloud storage as a native network drive.</span>
                  </div>
                  <button 
                     onClick={() => handleSave({ mountDrive: !settings.mountDrive })}

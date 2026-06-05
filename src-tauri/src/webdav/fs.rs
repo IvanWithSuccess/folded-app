@@ -45,10 +45,11 @@ impl ClusterFs {
         
         let mut segments: Vec<String> = decoded_path.split('/').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
         
-        // Trick for macOS Finder naming: 
-        // If we mount http://127.0.0.1:9876/FoldedCloud, Finder will name the drive "FoldedCloud".
-        // We need to ignore this first segment if it matches our desired display name.
-        if segments.get(0).map(|s| s.as_str()) == Some("FoldedCloud") {
+        // Trick for macOS Finder and Windows Explorer naming: 
+        // macOS mounts http://127.0.0.1:9876/FoldedCloud (using "FoldedCloud" folder).
+        // Windows WebClient maps http://127.0.0.1:9876/ to \\127.0.0.1@9876\DavWWWRoot (injects "DavWWWRoot" segment).
+        // We need to ignore this first segment if it matches our desired display name or Windows prefix.
+        if segments.get(0).map(|s| s.as_str()) == Some("FoldedCloud") || segments.get(0).map(|s| s.as_str()) == Some("DavWWWRoot") {
             segments.remove(0);
         }
         

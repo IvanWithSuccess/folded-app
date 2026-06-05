@@ -8,14 +8,39 @@ use std::fs;
 pub fn mount_drive(port: u16, drive_letter: &str, _custom_path: Option<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
-        let url = format!("http://localhost:{}", port);
-        // Using 'net use' to map a drive letter
+        // First unmount to prevent "device already in use" errors (System error 85)
+        let _ = Command::new("net")
+            .args(["use", drive_letter, "/delete", "/y"])
+            .status();
+
+        // Standard Windows WebDAV client UNC syntax with custom port
+        let unc_path = format!("\\\\127.0.0.1@{}\\DavWWWRoot", port);
+        log::info!("Windows: Mapping WebDAV drive {} to {}", drive_letter, unc_path);
+        
         let status = Command::new("net")
-            .args(["use", drive_letter, &url, "/persistent:no"])
+            .args(["use", drive_letter, &unc_path, "/persistent:no"])
             .status()?;
             
         if !status.success() {
-            return Err(anyhow!("Failed to mount drive using 'net use'"));
+            // Check if it's already mounted to the correct WebDAV path
+            if let Ok(output) = Command::new("net").args(["use", drive_letter]).output() {
+                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                if stdout_str.contains(drive_letter) && (stdout_str.contains("127.0.0.1@") || stdout_str.contains("DavWWWRoot")) {
+                    log::info!("Windows: Drive {} is already mapped to WebDAV, ignoring error.", drive_letter);
+                    return Ok(());
+                }
+            }
+
+            // Check if WebClient service is running
+            let wc_status = Command::new("sc").args(["query", "WebClient"]).output();
+            let mut extra_info = String::new();
+            if let Ok(output) = wc_status {
+                let service_info = String::from_utf8_lossy(&output.stdout);
+                if !service_info.contains("RUNNING") {
+                    extra_info = " (Windows WebClient service is not running. Start it by running 'sc start WebClient' as Administrator)".to_string();
+                }
+            }
+            return Err(anyhow!("Failed to mount drive using 'net use'{}. Please make sure the WebClient service is started and Basic Authentication over HTTP is enabled.", extra_info));
         }
     }
 
@@ -70,7 +95,7 @@ pub fn mount_drive(port: u16, drive_letter: &str, _custom_path: Option<String>) 
 pub fn unmount_drive(_drive_letter: &str, _custom_path: Option<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("net").args(["use", _drive_letter, "/delete"]).spawn();
+        let _ = Command::new("net").args(["use", _drive_letter, "/delete", "/y"]).status();
     }
     
     #[cfg(target_os = "macos")]
