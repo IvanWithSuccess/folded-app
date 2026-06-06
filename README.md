@@ -3,7 +3,7 @@
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC107?logo=tauri&logoColor=white)](https://tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-PolyForm_Shield-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue?logo=windows&logoColor=white)](#)
 
 **Folded Cloud** is a high-performance native Windows application that turns your Telegram accounts into a unified, distributed cluster of unlimited cloud storage with deep operating system integration.
@@ -106,3 +106,13 @@ Privacy was a core design priority:
 * **No Middlemen**: All API requests and file chunks go directly between your device and Telegram's servers. No third-party trackers or telemetry.
 * **Local Session Storage**: Auth sessions (`%USERPROFILE%\.folded\sessions\`) and your SQLite index database (`%USERPROFILE%\.folded\metadata_db.sqlite`) are stored entirely on your local machine, secured by OS file permissions.
 * **Session Encryption**: Authentication credentials and MTProto keys are fully protected by Telegram's native cryptographic protocols.
+
+---
+
+## 📄 License
+
+This project is licensed under the **PolyForm Shield License 1.0.0**. 
+
+Under this license, you are free to use, copy, modify, and distribute the software for any purpose **except** for creating a product or service that competes with Folded Cloud or any other product/service provided by the copyright holder (IvanSuccess). 
+
+For details, please refer to the [LICENSE](LICENSE) file.
