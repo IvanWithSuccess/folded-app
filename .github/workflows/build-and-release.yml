@@ -24,6 +24,8 @@ jobs:
 
       - name: Install Rust stable
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
 
       - name: Install frontend dependencies
         run: npm install
@@ -38,3 +40,5 @@ jobs:
           releaseBody: 'Automatic build from GitHub Actions.'
           releaseDraft: false
           prerelease: false
+          args: --target universal-apple-darwin
+
