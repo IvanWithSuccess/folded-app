@@ -33,7 +33,7 @@ export default function InstallMacOSPage() {
         {/* Placeholder Step 1 */}
         <section className="flex flex-col gap-6">
           <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[24px]">Step 1: Move to Applications</h2>
-          <p className="text-white/70 leading-relaxed text-[16px]">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
             Drag and drop the Folded.app icon into your Applications folder.
           </p>
           <div className="w-full aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center border border-white/20 border-dashed text-white/30 gap-2">
@@ -45,13 +45,13 @@ export default function InstallMacOSPage() {
         {/* Placeholder Step 2 */}
         <section className="flex flex-col gap-6">
           <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[24px]">Step 2: Allow the App to Run</h2>
-          <p className="text-white/70 leading-relaxed text-[16px]">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
             Open the <strong>Terminal</strong> app (press <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[12px]">Cmd + Space</kbd> and type "Terminal"). Then, copy and paste this exact command and press Enter:
           </p>
           <div className="bg-black/50 border border-white/10 rounded-lg p-4 font-mono text-[14px] text-[#35c6ff] break-all">
             sudo xattr -r -c /Applications/Folded.app
           </div>
-          <p className="text-white/70 leading-relaxed text-[14px] italic">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70 text-[14px] italic">
             Note: It may ask for your Mac password. Simply type it and press Enter — you won't see the letters as you type, which is normal!
           </p>
           <div className="w-full aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center border border-white/20 border-dashed text-white/30 gap-2">
@@ -62,7 +62,7 @@ export default function InstallMacOSPage() {
         {/* Placeholder Step 3 */}
         <section className="flex flex-col gap-6">
           <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[24px]">Step 3: Launch Folded</h2>
-          <p className="text-white/70 leading-relaxed text-[16px]">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
             You can now safely launch Folded from your Applications folder or Launchpad!
           </p>
         </section>

@@ -33,7 +33,7 @@ export default function InstallWindowsPage() {
         {/* Placeholder Step 1 */}
         <section className="flex flex-col gap-6">
           <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[24px]">Step 1: Run the Installer</h2>
-          <p className="text-white/70 leading-relaxed text-[16px]">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
             Double-click the .exe file you just downloaded.
           </p>
           <div className="w-full aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center border border-white/20 border-dashed text-white/30 gap-2">
@@ -45,7 +45,7 @@ export default function InstallWindowsPage() {
         {/* Placeholder Step 2 */}
         <section className="flex flex-col gap-6">
           <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[24px]">Step 2: Microsoft Defender SmartScreen</h2>
-          <p className="text-white/70 leading-relaxed text-[16px]">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
             Windows might show a blue warning screen saying "Windows protected your PC". To proceed, click the <strong>"More info"</strong> text link right below the description.
           </p>
           <div className="w-full aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center border border-white/20 border-dashed text-white/30 gap-2">
@@ -56,7 +56,7 @@ export default function InstallWindowsPage() {
         {/* Placeholder Step 3 */}
         <section className="flex flex-col gap-6">
           <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[24px]">Step 3: Run Anyway</h2>
-          <p className="text-white/70 leading-relaxed text-[16px]">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
             A new button will appear at the bottom right. Click <strong>"Run anyway"</strong> and follow the standard installation wizard.
           </p>
           <div className="w-full aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center border border-white/20 border-dashed text-white/30 gap-2">

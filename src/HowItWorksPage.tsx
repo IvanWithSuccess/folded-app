@@ -39,10 +39,10 @@ export default function HowItWorksPage() {
         {/* Section 1: The Core Philosophy */}
         <section className="flex flex-col gap-10">
           <div className="flex flex-col gap-6">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[28px] md:text-[36px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
               1. The Big Idea: Taming the Infinite Mess
             </h2>
-            <div className="flex flex-col gap-4 text-white/70 leading-relaxed text-[16px] md:text-[18px]">
+            <div className="flex flex-col gap-4 font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
               <p>
                 Imagine you have a magical, bottomless toy box (that's Telegram's <strong>"Saved Messages"</strong>). You can throw as many toys into it as you want, and it will never get full. It's completely free and exists reliably in the cloud.
               </p>
@@ -77,10 +77,10 @@ export default function HowItWorksPage() {
         {/* Section 2: Deep Dive into Concepts */}
         <section className="flex flex-col gap-12">
           <div className="flex flex-col gap-4">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[28px] md:text-[36px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
               2. How It Actually Works: The Technology
             </h2>
-            <p className="text-white/70 leading-relaxed text-[16px] md:text-[18px]">
+            <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
               To make a cloud drive feel exactly like a physical hard drive plugged into your computer, we had to use some of the most advanced engineering techniques available. Let's break them down.
             </p>
           </div>
@@ -92,10 +92,10 @@ export default function HowItWorksPage() {
             </div>
             <div className="flex flex-col gap-3">
               <h3 className="font-['Montserrat:SemiBold',sans-serif] text-[22px] text-yellow-400">The Magic Trick: Virtual File Systems (VFS)</h3>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Folded isn't just a window you click inside. It uses deep system integrations called <strong>FUSE</strong> (on macOS/Linux) or <strong>WinFSP</strong> (on Windows). 
               </p>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Think of it like a very convincing illusion. Folded tells your operating system: <em>"Hey, a brand new physical hard drive was just plugged in!"</em> Your computer believes it, and shows it in Finder or File Explorer. But when you double-click a folder, Folded instantly runs to Telegram, asks what's inside, and hands the answer back to your computer before you even blink. It takes up <strong>zero actual space</strong> on your real hard drive.
               </p>
             </div>
@@ -108,10 +108,10 @@ export default function HowItWorksPage() {
             </div>
             <div className="flex flex-col gap-3">
               <h3 className="font-['Montserrat:SemiBold',sans-serif] text-[22px] text-purple-400">The Pizza Slicer: Handling Giant Files</h3>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Telegram has a strict rule: you can only upload files up to 2GB (or 4GB with Premium). So, what happens if you want to store a massive 50GB 4K video?
               </p>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Enter the <strong>Chunking Engine</strong>. Imagine you have a giant pizza that won't fit in the delivery box. Folded acts like a pizza slicer: it perfectly cuts your 50GB file into tiny, invisible pieces and uploads them one by one. When you want to watch the video, Folded stitches the slices back together so fast that your media player thinks it's reading one solid file. You never see the slices; you just see your 50GB video.
               </p>
             </div>
@@ -124,10 +124,10 @@ export default function HowItWorksPage() {
             </div>
             <div className="flex flex-col gap-3">
               <h3 className="font-['Montserrat:SemiBold',sans-serif] text-[22px] text-[#35c6ff]">The High-Speed Train: MTProto</h3>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Normal websites and cloud drives communicate using a regular "road" called HTTP. It works, but it can get stuck in traffic. 
               </p>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Folded doesn't use HTTP. Instead, it speaks Telegram's native language: <strong>MTProto</strong>. This is like a dedicated, high-speed underground bullet train built exclusively for Telegram data. It allows Folded to download and upload files in parallel (sending multiple trains at once) at maximum bandwidth, bypassing the usual internet traffic jams.
               </p>
             </div>
@@ -140,10 +140,10 @@ export default function HowItWorksPage() {
             </div>
             <div className="flex flex-col gap-3">
               <h3 className="font-['Montserrat:SemiBold',sans-serif] text-[22px] text-green-400">Zero-Knowledge Security</h3>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 "Wait, is it safe to store my personal files in a chat app?" Absolutely.
               </p>
-              <p className="text-white/70 leading-relaxed">
+              <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
                 Before a file ever leaves your computer, Folded locks it in a secure safe (encryption). The key to that safe never leaves your device. Even if someone were to hack Telegram's servers and look at your "Saved Messages", all they would see is useless, scrambled gibberish. We (the creators of Folded) have exactly zero access to your files. We don't have servers. It's just your computer talking securely to Telegram.
               </p>
             </div>
@@ -153,10 +153,10 @@ export default function HowItWorksPage() {
         {/* Section 3: The Data Flow Diagram */}
         <section className="flex flex-col gap-10">
           <div className="flex flex-col gap-4">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[28px] md:text-[36px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
               3. The Full Journey of a File
             </h2>
-            <p className="text-white/70 leading-relaxed text-[16px] md:text-[18px]">
+            <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
               Here is exactly what happens in the milliseconds after you drag and drop a file into your Folded drive.
             </p>
           </div>
@@ -219,7 +219,7 @@ export default function HowItWorksPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#35c6ff]/10 blur-[100px] rounded-full pointer-events-none" />
           
           <div className="flex flex-col gap-4 z-10">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[28px] md:text-[36px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
               Why is this a game changer?
             </h2>
           </div>

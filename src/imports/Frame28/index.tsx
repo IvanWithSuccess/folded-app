@@ -243,10 +243,12 @@ function Frame10() {
 function Frame11() {
   return (
     <div className="flex flex-col gap-[24px] items-start text-white w-full lg:w-[315px] shrink-0">
-      <p className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] w-full">Given</p>
-      <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] w-full whitespace-pre-wrap">
-        Telegram offers unlimited cloud storage for your "Saved Messages", but it lacks the structure and organization of a proper file manager.
-      </p>
+      <p className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] w-full">The Premise</p>
+      <div className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] w-full flex flex-col gap-4">
+        <p>Telegram gives every user unlimited, encrypted personal cloud storage — completely free.</p>
+        <p>You can use it in groups, channels, and Saved Messages to store any kind of file. The only constraint: individual files can't exceed 2 GB for regular users, or 4 GB for Premium subscribers.</p>
+        <p>It's arguably the most generous storage service in the world — yet it's severely underutilized.</p>
+      </div>
     </div>
   );
 }
@@ -254,10 +256,12 @@ function Frame11() {
 function Frame12() {
   return (
     <div className="flex flex-col gap-[24px] items-start text-white w-full lg:w-[315px] shrink-0">
-      <p className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] w-full">Folded</p>
-      <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] w-full whitespace-pre-wrap">
-        We implemented a fully-fledged cloud drive natively integrated within a sleek Telegram client, maintaining the high performance and security you expect.
-      </p>
+      <p className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] w-full">The Problem</p>
+      <div className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] w-full flex flex-col gap-4">
+        <p>Storing files in Telegram isn't always convenient — they get buried in chats. And it's not always private: anyone with access to your device can easily browse those same files.</p>
+        <p>Imagine a chat with thousands of files and messages — it quickly becomes an unmanageable mess. People lose track of their files, photos, and saved links.</p>
+        <p>You have an incredibly powerful tool at your fingertips — but its implementation makes it nearly impossible to use effectively.</p>
+      </div>
     </div>
   );
 }
@@ -265,10 +269,12 @@ function Frame12() {
 function Frame14() {
   return (
     <div className="flex flex-col gap-[24px] items-start text-white w-full lg:w-[315px] shrink-0">
-      <p className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] w-full">Result</p>
-      <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] w-full whitespace-pre-wrap">
-        Your own infinitely scalable, free cloud drive built on top of the world's fastest messaging infrastructure.
-      </p>
+      <p className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] w-full">The Solution</p>
+      <div className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] w-full flex flex-col gap-4">
+        <p>Using the official Telegram API, I built a client designed not to replace the official app — but to unlock the full potential of your account's storage.</p>
+        <p>You get a familiar file explorer interface with complete, effortless control over your infinite personal cloud. Store files of any size and format, without limits.</p>
+        <p>I've gone even further by integrating this cloud directly into your operating system — so you can use it just like any other folder on your computer.</p>
+      </div>
     </div>
   );
 }

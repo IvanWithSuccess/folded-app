@@ -36,7 +36,7 @@ export default function DownloadPage() {
               <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[28px]">macOS</h2>
             </div>
             
-            <p className="text-white/70 leading-relaxed text-[16px]">
+            <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
               Our Universal macOS app natively supports both Apple Silicon (M-series) and Intel processors.
             </p>
 
@@ -49,7 +49,7 @@ export default function DownloadPage() {
               <AlertTriangle className="text-orange-400 shrink-0 mt-1" size={24} />
               <div className="flex flex-col gap-4 text-[14px]">
                 <p className="font-['Montserrat:SemiBold',sans-serif] text-[16px] text-orange-400">Installation Guide</p>
-                <div className="text-white/70 leading-relaxed flex flex-col gap-3">
+                <div className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70 flex flex-col gap-3">
                   <p>Since Folded is an independent app, macOS will block it by default. Don't worry, it's completely safe! Just follow these 3 simple steps:</p>
                   
                   <ol className="list-decimal list-outside ml-4 flex flex-col gap-2">
@@ -83,7 +83,7 @@ export default function DownloadPage() {
               <h2 className="font-['Montserrat:SemiBold',sans-serif] text-[28px]">Windows</h2>
             </div>
             
-            <p className="text-white/70 leading-relaxed text-[16px]">
+            <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
               Available in three distinct architectures. Choose the one that matches your system type.
             </p>
 
@@ -113,7 +113,7 @@ export default function DownloadPage() {
               <AlertTriangle className="text-orange-400 shrink-0 mt-1" size={24} />
               <div className="flex flex-col gap-4 text-[14px]">
                 <p className="font-['Montserrat:SemiBold',sans-serif] text-[16px] text-orange-400">Installation Guide</p>
-                <div className="text-white/70 leading-relaxed flex flex-col gap-3">
+                <div className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70 flex flex-col gap-3">
                   <p>Windows might show a blue warning screen saying "Windows protected your PC". This is normal for new apps! To install safely:</p>
                   
                   <ol className="list-decimal list-outside ml-4 flex flex-col gap-2">
