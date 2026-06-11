@@ -1,30 +1,37 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from 'vite'
+import path from 'path'
+import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
-export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
 
-  // Vite options tailored for Tauri development
-  clearScreen: false,
-  server: {
-    port: 5173,
-    strictPort: true,
-    host: true,
-    hmr: {
-      overlay: false,  // Disable error overlay - errors go to DevTools console instead
+function figmaAssetResolver() {
+  return {
+    name: 'figma-asset-resolver',
+    resolveId(id) {
+      if (id.startsWith('figma:asset/')) {
+        const filename = id.replace('figma:asset/', '')
+        return path.resolve(__dirname, 'src/assets', filename)
+      }
     },
-    watch: {
-      ignored: ["**/src-tauri/**"],
-    },
-  },
-  optimizeDeps: {
-    exclude: ["@tauri-apps/api", "@tauri-apps/plugin-dialog"],
-    entries: ["index.html"], // Restrict scanning to index.html only
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
   }
-}));
+}
+
+export default defineConfig({
+  base: '/folded-app/',
+  plugins: [
+    figmaAssetResolver(),
+    // The React and Tailwind plugins are both required for Make, even if
+    // Tailwind is not being actively used – do not remove them
+    react(),
+    tailwindcss(),
+  ],
+  resolve: {
+    alias: {
+      // Alias @ to the src directory
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+
+  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
+  assetsInclude: ['**/*.svg', '**/*.csv'],
+})

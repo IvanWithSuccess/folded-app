@@ -1,40 +1,18 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { getErrorMessage } from './utils/errorUtils';
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router";
+import HomePage from "./imports/Frame28/index.tsx";
+import DownloadPage from "./DownloadPage.tsx";
+import StubPage from "./StubPage.tsx";
+import "./styles/index.css";
 
-// NUCLEAR SUPPRESSION: This runs before anything else to catch rejections 
-// that Vite might try to turn into a yellow screen.
-window.addEventListener('unhandledrejection', (event) => {
-  if (event.reason === undefined || event.reason === null) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    return;
-  }
-  const msg = getErrorMessage(event.reason);
-  if (msg.includes('IPC') || msg.includes('teardown') || msg.includes('cancel')) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    return;
-  }
-  // In development, Vite overlay is annoying for non-critical rejections.
-  event.preventDefault();
-}, true); // Use capture phase to be first
-
-window.addEventListener('error', (event) => {
-  if (!event.error) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }
-}, true);
-
-import App from './App';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import './styles/index.css';
-
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <ErrorBoundary name="ROOT_APP">
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
+createRoot(document.getElementById("root")!).render(
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/download" element={<DownloadPage />} />
+      <Route path="/how-it-works" element={<StubPage title="How It Works" />} />
+      <Route path="/manual" element={<StubPage title="Manual" />} />
+      <Route path="/updates" element={<StubPage title="Updates" />} />
+    </Routes>
+  </BrowserRouter>
 );
