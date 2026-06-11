@@ -13,11 +13,11 @@ import img202606091924471 from "./8ddc3ef606a4e21eca13a9f7df47d2c148fa343c.png";
 
 function Group() {
   return (
-    <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0">
-      <div className="col-1 h-[100.211px] ml-[19.86px] mt-0 relative row-1 w-[93.27px]" data-name="image 1">
-        <img alt="" className="absolute inset-0 max-w-none object-cover pointer-events-none size-full" src={imgImage1} />
+    <div className="flex flex-col items-center gap-3 relative shrink-0">
+      <div className="h-[100px] w-[93px] relative" data-name="image 1">
+        <img alt="" className="absolute inset-0 object-contain pointer-events-none size-full" src={imgImage1} />
       </div>
-      <p className="[word-break:break-word] col-1 font-['Montserrat:Black',sans-serif] font-black leading-[normal] ml-0 mt-[100.21px] relative row-1 text-[24px] md:text-[30px] text-white whitespace-nowrap">FOLDED</p>
+      <p className="font-['Montserrat:Black',sans-serif] font-black leading-none text-[24px] md:text-[30px] text-white whitespace-nowrap">FOLDED</p>
     </div>
   );
 }
@@ -48,7 +48,7 @@ function Frame3() {
   const location = useLocation();
   const isActive = location.pathname === "/";
   return (
-    <Link to="/" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[5px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
+    <Link to="/" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
       <Home />
       <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">Home</p>
     </Link>
@@ -78,7 +78,7 @@ function Frame4() {
   const location = useLocation();
   const isActive = location.pathname === "/how-it-works";
   return (
-    <Link to="/how-it-works" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[5px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
+    <Link to="/how-it-works" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
       <HelpCircle />
       <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">How it work</p>
     </Link>
@@ -103,7 +103,7 @@ function Frame5() {
   const location = useLocation();
   const isActive = location.pathname === "/download";
   return (
-    <Link to="/download" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[5px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
+    <Link to="/download" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
       <Download />
       <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">Download</p>
     </Link>
@@ -137,7 +137,7 @@ function Frame6() {
   const location = useLocation();
   const isActive = location.pathname === "/manual";
   return (
-    <Link to="/manual" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[5px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
+    <Link to="/manual" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
       <LifeBuoy />
       <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">Manual</p>
     </Link>
@@ -162,7 +162,7 @@ function Frame7() {
   const location = useLocation();
   const isActive = location.pathname === "/updates";
   return (
-    <Link to="/updates" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[5px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
+    <Link to="/updates" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
       <GitMerge />
       <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">Updates</p>
     </Link>
@@ -188,7 +188,7 @@ function Github() {
 
 function Frame8() {
   return (
-    <a href="https://github.com/folded-app/folded" target="_blank" rel="noopener noreferrer" className="content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[5px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all text-white">
+    <a href="https://github.com/folded-app/folded" target="_blank" rel="noopener noreferrer" className="content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all text-white">
       <Github />
       <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">GitHub</p>
     </a>
@@ -1071,11 +1071,11 @@ function Frame61() {
 
 function Group1() {
   return (
-    <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0">
-      <div className="col-1 h-[100.211px] ml-[19.86px] mt-0 relative row-1 w-[93.27px]" data-name="image 1">
-        <img alt="" className="absolute inset-0 max-w-none object-cover pointer-events-none size-full" src={imgImage1} />
+    <div className="flex flex-col items-center gap-3 relative shrink-0">
+      <div className="h-[100px] w-[93px] relative" data-name="image 1">
+        <img alt="" className="absolute inset-0 object-contain pointer-events-none size-full" src={imgImage1} />
       </div>
-      <p className="[word-break:break-word] col-1 font-['Montserrat:Black',sans-serif] font-black leading-[normal] ml-0 mt-[100.21px] relative row-1 text-[24px] md:text-[30px] text-white whitespace-nowrap">FOLDED</p>
+      <p className="font-['Montserrat:Black',sans-serif] font-black leading-none text-[24px] md:text-[30px] text-white whitespace-nowrap">FOLDED</p>
     </div>
   );
 }
