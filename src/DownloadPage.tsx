@@ -39,10 +39,10 @@ export default function DownloadPage() {
               Our Universal macOS app natively supports both Apple Silicon (M-series) and Intel processors.
             </p>
 
-            <button className="bg-white text-black font-['Montserrat:SemiBold',sans-serif] py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-white/90 transition-all w-full text-[16px] cursor-pointer">
+            <a href="https://github.com/IvanWithSuccess/folded-app/releases/download/v1.0.1/Folded_1.0.1_universal.dmg" className="bg-white text-black font-['Montserrat:SemiBold',sans-serif] py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-white/90 transition-all w-full text-[16px] cursor-pointer no-underline">
               <DownloadIcon size={20} />
               Download for macOS
-            </button>
+            </a>
 
             <div className="bg-[#1a1a1c] border border-orange-500/30 rounded-xl p-6 flex gap-4 mt-auto">
               <AlertTriangle className="text-orange-400 shrink-0 mt-1" size={24} />
@@ -83,19 +83,19 @@ export default function DownloadPage() {
             </p>
 
             <div className="flex flex-col gap-3">
-              <button className="bg-white text-black font-['Montserrat:SemiBold',sans-serif] py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-white/90 transition-all w-full text-[16px] cursor-pointer">
+              <a href="https://github.com/IvanWithSuccess/folded-app/releases/download/v1.0.1/Folded_1.0.1_x64-setup.exe" className="bg-white text-black font-['Montserrat:SemiBold',sans-serif] py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-white/90 transition-all w-full text-[16px] cursor-pointer no-underline">
                 <DownloadIcon size={20} />
                 Download for x64 (Standard)
-              </button>
+              </a>
               <div className="grid grid-cols-2 gap-3">
-                <button className="bg-white/10 text-white/90 font-['Montserrat:Regular',sans-serif] py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/20 border border-white/10 transition-all text-[14px] cursor-pointer">
+                <a href="https://github.com/IvanWithSuccess/folded-app/releases/download/v1.0.1/Folded_1.0.1_arm64-setup.exe" className="bg-white/10 text-white/90 font-['Montserrat:Regular',sans-serif] py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/20 border border-white/10 transition-all text-[14px] cursor-pointer no-underline">
                   <DownloadIcon size={16} />
                   ARM64
-                </button>
-                <button className="bg-white/10 text-white/90 font-['Montserrat:Regular',sans-serif] py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/20 border border-white/10 transition-all text-[14px] cursor-pointer">
+                </a>
+                <a href="https://github.com/IvanWithSuccess/folded-app/releases/download/v1.0.1/Folded_1.0.1_x86-setup.exe" className="bg-white/10 text-white/90 font-['Montserrat:Regular',sans-serif] py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/20 border border-white/10 transition-all text-[14px] cursor-pointer no-underline">
                   <DownloadIcon size={16} />
                   x86 (32-bit)
-                </button>
+                </a>
               </div>
             </div>
             

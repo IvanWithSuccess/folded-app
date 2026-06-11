@@ -1,12 +1,12 @@
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router";
+import { HashRouter, Routes, Route } from "react-router";
 import HomePage from "./imports/Frame28/index.tsx";
 import DownloadPage from "./DownloadPage.tsx";
 import StubPage from "./StubPage.tsx";
 import "./styles/index.css";
 
 createRoot(document.getElementById("root")!).render(
-  <BrowserRouter basename={import.meta.env.BASE_URL}>
+  <HashRouter>
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/download" element={<DownloadPage />} />
@@ -14,5 +14,5 @@ createRoot(document.getElementById("root")!).render(
       <Route path="/manual" element={<StubPage title="Manual" />} />
       <Route path="/updates" element={<StubPage title="Updates" />} />
     </Routes>
-  </BrowserRouter>
+  </HashRouter>
 );
