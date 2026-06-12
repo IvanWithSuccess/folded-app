@@ -6,6 +6,7 @@ import StubPage from "./StubPage.tsx";
 import HowItWorksPage from "./HowItWorksPage.tsx";
 import InstallMacOSPage from "./InstallMacOSPage.tsx";
 import InstallWindowsPage from "./InstallWindowsPage.tsx";
+import UserGuidePage from "./UserGuidePage.tsx";
 import "./styles/index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -16,7 +17,6 @@ createRoot(document.getElementById("root")!).render(
       <Route path="/install/macos" element={<InstallMacOSPage />} />
       <Route path="/install/windows" element={<InstallWindowsPage />} />
       <Route path="/how-it-works" element={<HowItWorksPage />} />
-      import UserGuidePage from "./UserGuidePage.tsx";
       <Route path="/guide" element={<UserGuidePage />} />
       <Route path="/updates" element={<StubPage title="Updates" />} />
     </Routes>

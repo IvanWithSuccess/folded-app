@@ -51,7 +51,7 @@ export default function UserGuidePage() {
             <ol className="list-decimal list-inside flex flex-col gap-4 font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70 ml-2">
               <li>Open the Folded application on your computer.</li>
               <li>A window will appear asking for your phone number or offering a QR code.</li>
-              <li>Open the official Telegram app on your phone, go to Settings -> Devices -> Link Desktop Device.</li>
+              <li>Open the official Telegram app on your phone, go to Settings → Devices → Link Desktop Device.</li>
               <li>Scan the QR code shown in Folded.</li>
             </ol>
 
