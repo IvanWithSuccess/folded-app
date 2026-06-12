@@ -12,6 +12,12 @@ export default function InstallMacOSPage() {
       </div>
 
       <main className="w-full max-w-[800px] px-4 py-20 flex flex-col gap-12 flex-grow z-10 text-white">
+
+        <Link to="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors w-fit mb-8">
+          <ArrowLeft size={20} />
+          <span>Back to Home</span>
+        </Link>
+
         <Link to="/download" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors w-fit">
           <ArrowLeft size={20} />
           <span>Back to Downloads</span>
@@ -51,7 +57,7 @@ export default function InstallMacOSPage() {
           <div className="bg-black/50 border border-white/10 rounded-lg p-4 font-mono text-[14px] text-[#35c6ff] break-all">
             sudo xattr -r -c /Applications/Folded.app
           </div>
-          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70 text-[14px] italic">
+          <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px]  tracking-[0.64px] text-white/70 text-[14px] italic">
             Note: It may ask for your Mac password. Simply type it and press Enter — you won't see the letters as you type, which is normal!
           </p>
           <div className="w-full aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center border border-white/20 border-dashed text-white/30 gap-2">

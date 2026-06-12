@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import React from 'react';
 import { Apple, Monitor, Download as DownloadIcon, AlertTriangle, Info } from 'lucide-react';
 import { Link } from 'react-router';
@@ -13,6 +14,12 @@ export default function DownloadPage() {
 
       {/* Main Content */}
       <main className="w-full max-w-[1200px] px-4 py-20 flex flex-col gap-24 flex-grow z-10 text-white">
+
+        <Link to="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors w-fit mb-8">
+          <ArrowLeft size={20} />
+          <span>Back to Home</span>
+        </Link>
+
         
         {/* Header Section */}
         <div className="flex flex-col items-center text-center gap-6">

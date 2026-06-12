@@ -1,3 +1,5 @@
+import { ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router';
 import { Frame1, Frame71 } from './imports/Frame28/index.tsx';
 
 export default function StubPage({ title }: { title: string }) {
@@ -8,6 +10,12 @@ export default function StubPage({ title }: { title: string }) {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center relative p-6 mt-20 md:mt-0">
+
+        <Link to="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors w-fit mb-8">
+          <ArrowLeft size={20} />
+          <span>Back to Home</span>
+        </Link>
+
         {/* Glow effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-[#004eff]/20 to-transparent rounded-full blur-[100px] -z-10 pointer-events-none"></div>
 

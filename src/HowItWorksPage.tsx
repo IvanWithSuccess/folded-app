@@ -39,7 +39,7 @@ export default function HowItWorksPage() {
         {/* Section 1: The Core Philosophy */}
         <section className="flex flex-col gap-10">
           <div className="flex flex-col gap-6">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[20px] md:text-[24px] text-white">
               1. The Big Idea: Taming the Infinite Mess
             </h2>
             <div className="flex flex-col gap-4 font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
@@ -77,7 +77,7 @@ export default function HowItWorksPage() {
         {/* Section 2: Deep Dive into Concepts */}
         <section className="flex flex-col gap-12">
           <div className="flex flex-col gap-4">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[20px] md:text-[24px] text-white">
               2. How It Actually Works: The Technology
             </h2>
             <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
@@ -153,7 +153,7 @@ export default function HowItWorksPage() {
         {/* Section 3: The Data Flow Diagram */}
         <section className="flex flex-col gap-10">
           <div className="flex flex-col gap-4">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[20px] md:text-[24px] text-white">
               3. The Full Journey of a File
             </h2>
             <p className="font-['Montserrat:Regular',sans-serif] font-normal leading-[22px] text-[16px] tracking-[0.64px] text-white/70">
@@ -219,7 +219,7 @@ export default function HowItWorksPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#35c6ff]/10 blur-[100px] rounded-full pointer-events-none" />
           
           <div className="flex flex-col gap-4 z-10">
-            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[24px] md:text-[30px] text-white">
+            <h2 className="font-['Montserrat:SemiBold',sans-serif] font-semibold text-[20px] md:text-[24px] text-white">
               Why is this a game changer?
             </h2>
           </div>

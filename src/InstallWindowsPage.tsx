@@ -12,6 +12,12 @@ export default function InstallWindowsPage() {
       </div>
 
       <main className="w-full max-w-[800px] px-4 py-20 flex flex-col gap-12 flex-grow z-10 text-white">
+
+        <Link to="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors w-fit mb-8">
+          <ArrowLeft size={20} />
+          <span>Back to Home</span>
+        </Link>
+
         <Link to="/download" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors w-fit">
           <ArrowLeft size={20} />
           <span>Back to Downloads</span>
