@@ -16,7 +16,8 @@ createRoot(document.getElementById("root")!).render(
       <Route path="/install/macos" element={<InstallMacOSPage />} />
       <Route path="/install/windows" element={<InstallWindowsPage />} />
       <Route path="/how-it-works" element={<HowItWorksPage />} />
-      <Route path="/manual" element={<StubPage title="Manual" />} />
+      import UserGuidePage from "./UserGuidePage.tsx";
+      <Route path="/guide" element={<UserGuidePage />} />
       <Route path="/updates" element={<StubPage title="Updates" />} />
     </Routes>
   </HashRouter>

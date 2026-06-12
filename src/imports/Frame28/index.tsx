@@ -135,11 +135,11 @@ function LifeBuoy() {
 
 function Frame6() {
   const location = useLocation();
-  const isActive = location.pathname === "/manual";
+  const isActive = location.pathname === "/guide";
   return (
-    <Link to="/manual" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
+    <Link to="/guide" className={`content-stretch flex gap-[6px] items-center justify-center px-[10px] py-[8px] relative rounded-[5px] shrink-0 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-all ${isActive ? 'bg-white text-[#09090b]' : 'text-white'}`}>
       <LifeBuoy />
-      <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">Manual</p>
+      <p className="[word-break:break-word] font-['Montserrat:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[15px] whitespace-nowrap">User Guide</p>
     </Link>
   );
 }
