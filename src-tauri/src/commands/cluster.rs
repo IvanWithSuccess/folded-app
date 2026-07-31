@@ -185,6 +185,27 @@ pub async fn sync_account(
     log::info!("Performing immediate maintenance crawl for {}", account_id);
     let _ = cluster_state.maintenance_crawl(&account_id, Arc::clone(&session_state), Arc::clone(&cache_state)).await;
 
+    // Run the chunk audit in the background — it has inter-batch delays to avoid FLOOD_WAIT
+    // and a 1-hour cooldown, so it's safe to fire-and-forget here.
+    {
+        let account_id_audit = account_id.clone();
+        let session_audit = Arc::clone(&session_state);
+        let cluster_audit = Arc::clone(&cluster_state);
+        let cache_audit = Arc::clone(&cache_state);
+        tokio::spawn(async move {
+            log::info!("[audit] Background audit started for {}", account_id_audit);
+            let deleted = cluster_audit
+                .audit_manifest_chunks(&account_id_audit, Arc::clone(&session_audit), Arc::clone(&cache_audit))
+                .await
+                .unwrap_or(0);
+            if deleted > 0 {
+                let _ = cluster_audit
+                    .push_manifest(&account_id_audit, Arc::clone(&session_audit), Arc::clone(&cache_audit))
+                    .await;
+            }
+        });
+    }
+
 
     let mut active = sync_tracker.active_crawlers.lock().await;
     if !active.contains_key(&account_id) {
@@ -207,9 +228,15 @@ pub async fn sync_account(
                     }
                     crawl_res = cluster_clone.maintenance_crawl(&account_id_clone, Arc::clone(&session_clone), Arc::clone(&cache_clone)) => {
                         if let Err(e) = crawl_res {
-                             log::error!("Background crawl error for {}: {}", account_id_clone, e);
+                            let err_msg = e.to_string();
+                            if err_msg.contains("code: 26") || err_msg.contains("not a database") {
+                                log::warn!("Crawler for {} encountered reset database (code 26). Stopping crawler.", account_id_clone);
+                                break;
+                            }
+                            log::error!("Background crawl error for {}: {}", account_id_clone, e);
                         }
                     }
+
                 }
                 
                 tokio::select! {
@@ -279,6 +306,7 @@ pub async fn create_storage_hub(
 
 #[tauri::command]
 pub async fn cluster_delete_file(
+    app: tauri::AppHandle,
     session_state: State<'_, Arc<SessionManager>>,
     cluster_state: State<'_, Arc<ClusterOrchestrator>>,
     cache_state: State<'_, Arc<MetadataCache>>,
@@ -288,11 +316,13 @@ pub async fn cluster_delete_file(
         .ok_or_else(|| format!("File {} not found", file_id))?;
 
     let session_arc = Arc::clone(&session_state);
-    cluster_state.delete_file(manifest, session_arc).await.map_err(|e| e.to_string())?;
+    let cache_arc = Arc::clone(&cache_state);
+    cluster_state.delete_file(manifest, session_arc, Some(cache_arc), Some(app)).await.map_err(|e| e.to_string())?;
     cache_state.delete_file(&file_id).await.map_err(|e| e.to_string())?;
     
     Ok(())
 }
+
 #[tauri::command]
 pub async fn format_storage(
     app: tauri::AppHandle,

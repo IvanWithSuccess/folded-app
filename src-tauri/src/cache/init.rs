@@ -6,9 +6,33 @@ use super::MetadataCache;
 
 impl MetadataCache {
     pub async fn new(db_path: &str) -> Result<Self> {
+        let path = std::path::Path::new(db_path);
+        if path.exists() {
+            if let Ok(meta) = std::fs::metadata(path) {
+                if meta.len() < 100 {
+                    log::warn!("Corrupted DB file (<100 bytes) detected. Removing: {}", db_path);
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+
         let opts = SqliteConnectOptions::from_str(&format!("sqlite:{}", db_path))?
             .create_if_missing(true);
-        let pool = SqlitePool::connect_with(opts).await?;
+
+        let pool = match SqlitePool::connect_with(opts.clone()).await {
+            Ok(p) => p,
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("code: 26") || err_msg.contains("not a database") {
+                    log::warn!("SQLITE_NOTADB (code 26) detected. Deleting corrupted database file and recreating: {}", db_path);
+                    let _ = std::fs::remove_file(db_path);
+                    SqlitePool::connect_with(opts).await?
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+
         
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS folders (
@@ -127,6 +151,17 @@ impl MetadataCache {
         ).execute(&pool).await?;
 
         sqlx::query(
+            "CREATE TABLE IF NOT EXISTS snapshots (
+                id TEXT PRIMARY KEY,
+                seq INTEGER NOT NULL,
+                device_name TEXT NOT NULL,
+                file_count INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL,
+                manifest_data TEXT
+            )"
+        ).execute(&pool).await?;
+
+        sqlx::query(
             "CREATE TABLE IF NOT EXISTS pending_tasks (
                 id TEXT PRIMARY KEY,
                 task_type TEXT NOT NULL, -- 'UPLOAD_FILE', 'UPLOAD_FOLDER'
@@ -135,9 +170,69 @@ impl MetadataCache {
                 retries INTEGER DEFAULT 0,
                 error TEXT,
                 created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                processed_files INTEGER DEFAULT 0,
+                total_files INTEGER DEFAULT 0
             )"
         ).execute(&pool).await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS git_repositories (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                local_path TEXT NOT NULL,
+                telegram_chat_id TEXT NOT NULL,
+                current_head TEXT,
+                remote_head TEXT,
+                current_branch TEXT NOT NULL DEFAULT 'main',
+                created_at INTEGER NOT NULL
+            )"
+        ).execute(&pool).await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS git_commits (
+                id TEXT PRIMARY KEY,
+                repository_id TEXT NOT NULL,
+                parent_id TEXT,
+                message_summary TEXT NOT NULL,
+                message_description TEXT,
+                author TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                manifest_data TEXT NOT NULL,
+                is_pushed BOOLEAN DEFAULT FALSE,
+                branch_name TEXT NOT NULL DEFAULT 'main',
+                FOREIGN KEY(repository_id) REFERENCES git_repositories(id)
+            )"
+        ).execute(&pool).await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS git_branches (
+                id TEXT PRIMARY KEY,
+                repository_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                head_commit_id TEXT,
+                created_at INTEGER NOT NULL,
+                UNIQUE(repository_id, name),
+                FOREIGN KEY(repository_id) REFERENCES git_repositories(id)
+            )"
+        ).execute(&pool).await?;
+
+        // MIGRATION: Ensure columns exist in existing databases
+        let _ = sqlx::query("ALTER TABLE pending_tasks ADD COLUMN processed_files INTEGER DEFAULT 0")
+            .execute(&pool).await;
+        let _ = sqlx::query("ALTER TABLE pending_tasks ADD COLUMN total_files INTEGER DEFAULT 0")
+            .execute(&pool).await;
+        let _ = sqlx::query("ALTER TABLE git_repositories ADD COLUMN current_branch TEXT NOT NULL DEFAULT 'main'")
+            .execute(&pool).await;
+        let _ = sqlx::query("ALTER TABLE git_commits ADD COLUMN branch_name TEXT NOT NULL DEFAULT 'main'")
+            .execute(&pool).await;
+
+        // MIGRATION: Seed 'main' branch for all existing repositories that have no branches yet
+        let _ = sqlx::query(
+            "INSERT OR IGNORE INTO git_branches (id, repository_id, name, head_commit_id, created_at)
+             SELECT lower(hex(randomblob(16))), id, 'main', current_head, created_at
+             FROM git_repositories"
+        ).execute(&pool).await;
 
         // Add performance indices
         let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_msg ON chunks(message_id)").execute(&pool).await;
@@ -202,4 +297,24 @@ impl MetadataCache {
 
         Ok(())
     }
+
+    pub async fn reset_database(&self) -> Result<()> {
+        log::info!("Resetting database: purging all metadata tables and vacuuming...");
+        let _ = sqlx::query("DELETE FROM files").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM folders").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM chunks").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM pending_tasks").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM settings").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM notes").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM snapshots").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM folder_history").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM mirror_rules").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM file_cache").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM account_sync_state").execute(&self.pool).await;
+        let _ = sqlx::query("DELETE FROM activity_log").execute(&self.pool).await;
+        let _ = sqlx::query("VACUUM").execute(&self.pool).await;
+        log::info!("Database successfully reset.");
+        Ok(())
+    }
 }
+

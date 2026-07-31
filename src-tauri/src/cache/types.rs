@@ -32,6 +32,8 @@ pub struct PendingTask {
     pub error: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub processed_files: Option<i32>,
+    pub total_files: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,3 +47,39 @@ pub struct MirrorRule {
     pub enabled: bool,
     pub last_sync_at: Option<i64>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GitRepository {
+    pub id: String,
+    pub name: String,
+    pub local_path: String,
+    pub telegram_chat_id: String,
+    pub current_head: Option<String>,
+    pub remote_head: Option<String>,
+    pub current_branch: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GitCommit {
+    pub id: String,
+    pub repository_id: String,
+    pub parent_id: Option<String>,
+    pub message_summary: String,
+    pub message_description: Option<String>,
+    pub author: String,
+    pub timestamp: i64,
+    pub manifest_data: String,
+    pub is_pushed: bool,
+    pub branch_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GitBranch {
+    pub id: String,
+    pub repository_id: String,
+    pub name: String,
+    pub head_commit_id: Option<String>,
+    pub created_at: i64,
+}
+

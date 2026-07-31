@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { FolderInfo, FileManifest, ColumnContent, SelectableItem } from '../types/file';
 import { useAppStore } from '../store/useAppStore';
 import { getErrorMessage } from '../utils/errorUtils';
@@ -72,6 +73,25 @@ export function useFileExplorer(category?: string) {
   useEffect(() => {
     initColumns();
   }, [initColumns, activeAccountId, category]);
+
+  // Auto-refresh when backend reports file tree changes (WebDAV uploads, task completions)
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let isMounted = true;
+
+    listen<{ folder_id: string | null }>('files-changed', () => {
+      if (!isMounted) return;
+      refreshCurrentView(pathRef.current);
+    }).then(fn => {
+      if (isMounted) unlisten = fn;
+      else fn();
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+      if (unlisten) unlisten();
+    };
+  }, [refreshCurrentView]);
 
   return {
     columns, setColumns,

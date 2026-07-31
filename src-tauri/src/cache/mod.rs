@@ -13,8 +13,11 @@ mod search;
 mod sync;
 mod maintenance;
 mod types;
+mod git;
 
 pub use types::*;
+pub use files::SnapshotRecord;
+
 
 pub struct MetadataCache {
     pool: Pool<Sqlite>,

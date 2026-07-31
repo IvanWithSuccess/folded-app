@@ -2,7 +2,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use std::collections::HashSet;
 use grammers_tl_types as tl;
-use crate::cluster::{ClusterOrchestrator, FileManifest, FoldedManifest, ChunkMeta};
+use crate::cluster::{ClusterOrchestrator, FoldedManifest};
 
 impl ClusterOrchestrator {
     pub async fn index_account(
@@ -16,6 +16,12 @@ impl ClusterOrchestrator {
         let _ = self.pull_manifest(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await;
         // 2. Scan for any new messages/notes since last run
         let _ = self.maintenance_crawl(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await;
+        // 3. Audit all known chunk message_ids against Telegram to catch external deletions
+        let deleted = self.audit_manifest_chunks(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await.unwrap_or(0);
+        if deleted > 0 {
+            log::info!("Audit removed {} ghost entries for {}; pushing updated manifest", deleted, account_id);
+            let _ = self.push_manifest(account_id, Arc::clone(&session_manager), Arc::clone(&cache)).await;
+        }
         Ok(())
     }
 
@@ -275,100 +281,21 @@ impl ClusterOrchestrator {
         if let Some(media) = msg.media() {
             match media {
                 Media::Document(doc) => {
-                    let mut file_name = doc.name().unwrap_or("").to_string();
-                    let mime = doc.mime_type().unwrap_or("");
-                    
-                    if file_name.is_empty() {
-                        let extension = match mime {
-                            "video/mp4" => "mp4",
-                            "video/quicktime" => "mov",
-                            "audio/mpeg" => "mp3",
-                            "audio/ogg" => "ogg",
-                            "application/pdf" => "pdf",
-                            _ => {
-                                if mime.starts_with("video/") { "mp4" }
-                                else if mime.starts_with("audio/") { "mp3" }
-                                else if mime.starts_with("image/") { "jpg" }
-                                else { "dat" }
-                            }
-                        };
-                        
-                        let prefix = if mime.starts_with("video/") { "Video" }
-                                    else if mime.starts_with("audio/") { "Audio" }
-                                    else { "File" };
-                                    
-                        file_name = format!("{}_{}.{}", prefix, msg.id(), extension);
-                    }
-
+                    // Only track attachment_id for note metadata — do NOT create file entries.
+                    // The manifest (from pull_manifest / push_manifest) is the sole source of truth
+                    // for files on the WebDAV disk.
+                    let file_name = doc.name().unwrap_or("").to_string();
                     let is_metadata = file_name.starts_with("._") || file_name == ".DS_Store" || file_name == "Thumbs.db";
                     if !file_name.starts_with("chunk_") && !file_name.ends_with(".dat") && !is_manifest && !is_metadata {
                         let file_id = format!("ext_{}_{}", account_id, msg.id());
-                        attachment_ids.push(file_id.clone());
-                        let manifest = FileManifest {
-                            id: file_id.clone(),
-                            name: file_name,
-                            total_size: doc.size().unwrap_or(0) as u64,
-                            chunk_size: doc.size().unwrap_or(0) as u64,
-                            chunks: vec![ChunkMeta {
-                                            chunk_id: format!("ext_{}_{}", account_id, msg.id()),
-                                            account_id: account_id.to_string(),
-                                            part_index: 0,
-                                            message_id: msg.id() as i64,
-                                            size_bytes: doc.size().unwrap_or(0) as u64,
-                                        }],
-                            folder_id: None,
-                            account_id: Some(account_id.to_string()),
-                            storage_hub_id: None,
-                            storage_hub_access_hash: None,
-                            is_external: true,
-                            is_starred: false,
-                            created_at: msg.date().timestamp(),
-                            is_current_version: true,
-                            version_of: None,
-                            version_number: 1,
-                            deleted_at: None,
-                        };
-                        let _ = cache.save_file(manifest).await;
+                        attachment_ids.push(file_id);
                     }
                 }
-                Media::Photo(photo) => {
+                Media::Photo(_photo) => {
+                    // Only track attachment_id for note metadata — no file entries.
                     if !is_manifest {
                         let file_id = format!("ext_photo_{}_{}", account_id, msg.id());
-                        attachment_ids.push(file_id.clone());
-                        
-                        // Get the largest size for the photo
-                        let photo_size = photo.thumbs().iter()
-                            .filter_map(|t| match t {
-                                grammers_client::media::PhotoSize::Size(s) => Some(s.size as u64),
-                                _ => None
-                            })
-                            .max().unwrap_or(0);
-
-                        let manifest = FileManifest {
-                            id: file_id.clone(),
-                            name: format!("Photo_{}_{}.jpg", msg.id(), photo.id()),
-                            total_size: photo_size,
-                            chunk_size: photo_size,
-                            chunks: vec![ChunkMeta {
-                                            chunk_id: file_id.clone(),
-                                            account_id: account_id.to_string(),
-                                            part_index: 0,
-                                            message_id: msg.id() as i64,
-                                            size_bytes: photo_size,
-                                        }],
-                            folder_id: None,
-                            account_id: Some(account_id.to_string()),
-                            storage_hub_id: None,
-                            storage_hub_access_hash: None,
-                            is_external: true,
-                            is_starred: false,
-                            created_at: msg.date().timestamp(),
-                            is_current_version: true,
-                            version_of: None,
-                            version_number: 1,
-                            deleted_at: None,
-                        };
-                        let _ = cache.save_file(manifest).await;
+                        attachment_ids.push(file_id);
                     }
                 }
                 _ => {}
@@ -394,4 +321,109 @@ impl ClusterOrchestrator {
         }
         Ok(())
     }
+
+    /// Batch-verify all known chunk message_ids against Telegram.
+    /// Any message that Telegram returns as MessageEmpty (or doesn't return at all)
+    /// was deleted externally — we purge it from the local cache.
+    ///
+    /// Rate-limit aware: adds 1.5s delay between each batch of 100 IDs to avoid
+    /// FLOOD_WAIT from messages.getMessages. Also enforces a 1-hour cooldown
+    /// so the audit doesn't run on every crawl cycle.
+    ///
+    /// Returns the number of deleted entries.
+    pub async fn audit_manifest_chunks(
+        &self,
+        account_id: &str,
+        session_manager: Arc<crate::session_manager::SessionManager>,
+        cache: Arc<crate::cache::MetadataCache>,
+    ) -> Result<usize> {
+        // --- 1-hour cooldown: skip if audited recently ---
+        let now = chrono::Utc::now().timestamp();
+        let last_audit = cache.get_setting(&format!("last_audit_{}", account_id)).await
+            .ok().flatten()
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        if now - last_audit < 3600 {
+            log::info!("[audit] Skipping audit for {} — ran {}s ago (cooldown: 1h)", account_id, now - last_audit);
+            return Ok(0);
+        }
+
+        let client = session_manager.get_client_by_id(account_id).await
+            .ok_or_else(|| anyhow!("Account not connected"))?;
+
+        let all_ids = cache.get_all_linked_message_ids(account_id).await?;
+        if all_ids.is_empty() {
+            return Ok(0);
+        }
+
+        log::info!("[audit] Starting chunk audit for {} ({} known message IDs)", account_id, all_ids.len());
+
+        let id_vec: Vec<i32> = all_ids.into_iter().collect();
+        let mut deleted_count = 0usize;
+        let total_batches = (id_vec.len() + 99) / 100;
+
+        for (batch_idx, batch) in id_vec.chunks(100).enumerate() {
+            // Inter-batch delay to stay well below Telegram's rate limit
+            // Skip delay on the very first batch
+            if batch_idx > 0 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+            }
+
+            let input_ids: Vec<tl::enums::InputMessage> = batch
+                .iter()
+                .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
+                .collect();
+
+            let request = tl::functions::messages::GetMessages { id: input_ids };
+
+            let result = match client.invoke(&request).await {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("[audit] batch {}/{} getMessages failed: {}", batch_idx + 1, total_batches, e);
+                    // On error, back off extra before next batch
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+
+            // Collect IDs that Telegram returned as real (non-empty) messages
+            let returned_ids: HashSet<i32> = match result {
+                tl::enums::messages::Messages::Messages(m) => m.messages,
+                tl::enums::messages::Messages::Slice(m) => m.messages,
+                tl::enums::messages::Messages::ChannelMessages(m) => m.messages,
+                tl::enums::messages::Messages::NotModified(_) => vec![],
+            }
+            .into_iter()
+            .filter_map(|msg| match msg {
+                tl::enums::Message::Empty(_) => None,   // deleted
+                m => Some(m.id()),
+            })
+            .collect();
+
+            for &id in batch {
+                if !returned_ids.contains(&id) {
+                    log::info!("[audit] message_id {} gone from Telegram ({}) — purging", id, account_id);
+                    let _ = cache.delete_by_message_id(account_id, id).await;
+                    deleted_count += 1;
+                }
+            }
+
+            if total_batches > 1 {
+                log::info!("[audit] batch {}/{} done, {} purged so far", batch_idx + 1, total_batches, deleted_count);
+            }
+        }
+
+        // Record audit timestamp so we don't run again for 1 hour
+        let _ = cache.update_setting(&format!("last_audit_{}", account_id), &now.to_string()).await;
+
+        if deleted_count > 0 {
+            log::info!("[audit] Done: purged {} ghost entries for account {}", deleted_count, account_id);
+        } else {
+            log::info!("[audit] Done: all chunks verified, no deletions for account {}", account_id);
+        }
+
+        Ok(deleted_count)
+    }
 }
+

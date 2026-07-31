@@ -9,6 +9,10 @@ pub mod cache;
 pub mod webdav;
 pub mod os_integration;
 pub mod commands;
+pub mod crypto;
+pub mod security;
+pub mod ledger;
+
 
 use session_manager::SessionManager;
 use cluster::ClusterOrchestrator;
@@ -130,14 +134,6 @@ fn main() {
         }));
 
     let cluster_orchestrator = Arc::new(ClusterOrchestrator::new());
-    
-    let webdav_bridge = Arc::new(WebDavBridge::new(
-        Arc::clone(&metadata_cache),
-        Arc::clone(&cluster_orchestrator),
-        Arc::clone(&session_manager),
-        tmp_dir,
-    ));
-
     let cache_for_setup = Arc::clone(&metadata_cache);
     let sync_tracker = Arc::new(SyncTracker::new());
 
@@ -171,10 +167,19 @@ fn main() {
             }
         })
         .setup(move |app: &mut tauri::App| {
-            // Force Dark theme for the main window to prevent white title bar in production
+            // Force Light theme for the main window to match user preference
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_theme(Some(tauri::Theme::Dark));
+                let _ = window.set_theme(Some(tauri::Theme::Light));
             }
+
+            let webdav_bridge = Arc::new(WebDavBridge::new(
+                Arc::clone(&metadata_cache),
+                Arc::clone(&cluster_orchestrator),
+                Arc::clone(&session_manager),
+                tmp_dir,
+                Some(app.handle().clone()),
+            ));
+
 
             let mirror_manager = Arc::new(MirrorManager::new(
                 app.handle().clone(),
@@ -205,6 +210,74 @@ fn main() {
             tauri::async_runtime::spawn(async move {
                 task_manager_clone.start().await;
             });
+
+            // Automated Snapshot Scheduler
+            let cache_for_snapshots = Arc::clone(&metadata_cache);
+            let app_handle_for_snapshots = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+
+                    let schedule = cache_for_snapshots.get_setting("snapshot_schedule").await
+                        .unwrap_or(None)
+                        .unwrap_or_else(|| "OFF".into());
+
+                    if schedule == "OFF" {
+                        continue;
+                    }
+
+                    let interval_secs: i64 = match schedule.as_str() {
+                        "HOURLY" => 3600,
+                        "DAILY" => 86400,
+                        "WEEKLY" => 604800,
+                        "MONTHLY" => 2592000,
+                        _ => continue,
+                    };
+
+                    let last_at_str = cache_for_snapshots.get_setting("last_snapshot_at").await
+                        .unwrap_or(None)
+                        .unwrap_or_else(|| "0".into());
+
+                    let last_at: i64 = last_at_str.parse().unwrap_or(0);
+                    let now = chrono::Utc::now().timestamp();
+
+                    if now - last_at >= interval_secs {
+                        log::info!("AUTO SNAPSHOT [TRIGGERED]: Creating automated snapshot (schedule: {})", schedule);
+                        if let Ok(files) = cache_for_snapshots.get_files().await {
+                            if let Ok(seq) = cache_for_snapshots.get_next_snapshot_seq().await {
+                                let folders = cache_for_snapshots.get_folders_by_account("").await.unwrap_or_default();
+                                let note_attachments = cache_for_snapshots.get_all_note_attachments("").await.unwrap_or_default();
+                                let manifest = crate::cluster::FoldedManifest {
+                                    version: 1,
+                                    folders,
+                                    files: files.clone(),
+                                    note_attachments,
+                                    updated_at: now,
+                                };
+                                let manifest_json = serde_json::to_string(&manifest).ok();
+
+                                let record = crate::cache::SnapshotRecord {
+                                    id: format!("snap-{}", now),
+                                    seq,
+                                    device_name: "MacBook-Pro-Vault (Scheduled)".into(),
+                                    file_count: files.len(),
+                                    timestamp: now,
+                                    manifest_data: manifest_json,
+                                };
+
+                                if let Ok(_) = cache_for_snapshots.create_snapshot_record(record).await {
+                                    let _ = cache_for_snapshots.update_setting("last_snapshot_at", &now.to_string()).await;
+                                    if let Ok(snaps) = cache_for_snapshots.get_snapshots().await {
+                                        use tauri::Emitter;
+                                        let _ = app_handle_for_snapshots.emit("snapshot-created", &snaps);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>).unwrap();
             let show_i = MenuItem::with_id(app, "show", "Open Folded Cloud", true, None::<&str>).unwrap();

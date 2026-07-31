@@ -4,20 +4,9 @@ use super::ClusterOrchestrator;
 
 impl ClusterOrchestrator {
     pub(crate) fn determine_chunk_size(total_bytes: u64, max_chunk_size_bytes: u64) -> u64 {
-        const MB: u64 = 1024 * 1024;
-        const GB: u64 = 1024 * MB;
-        
-        let target = if total_bytes < 50 * MB {
-            10 * MB // Smaller files: 10MB chunks (better distribution across accounts)
-        } else if total_bytes < 1 * GB {
-            50 * MB // Up to 1GB: 50MB chunks
-        } else if total_bytes < 10 * GB {
-            500 * MB // 1-10GB: 500MB chunks
-        } else {
-            1900 * MB // 10GB+: 1.9GB chunks safely under Telegram's 2.0GB limit
-        };
-        
-        target.min(max_chunk_size_bytes)
+        // Use the user-configured chunk size directly.
+        // If the file is smaller than the chunk size, upload it as a single chunk.
+        max_chunk_size_bytes.min(total_bytes).max(1)
     }
 
     pub(crate) fn plan_chunks(&self, file_path: PathBuf, account_ids: &[String], max_chunk_size_bytes: u64) -> Result<Vec<(usize, String, u64)>> {

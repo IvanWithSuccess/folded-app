@@ -7,12 +7,12 @@
     "core:path:default",
     "core:event:default",
     "core:window:default",
+    "core:window:allow-start-dragging",
     "core:app:default",
+
     "core:resources:default",
     "core:menu:default",
     "core:tray:default",
-    "dialog:allow-confirm",
-    "dialog:allow-message",
-    "dialog:allow-ask"
+    "dialog:default"
   ]
 }

@@ -84,4 +84,26 @@ impl MetadataCache {
         }
         Ok(entries)
     }
+
+    pub async fn get_recent_activity(&self, limit: i64) -> Result<Vec<ActivityEntry>> {
+        let rows = sqlx::query("SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT ?")
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut entries = Vec::new();
+        for row in rows {
+            entries.push(ActivityEntry {
+                id: row.get("id"),
+                item_id: row.get("item_id"),
+                item_name: row.get("item_name"),
+                item_type: row.get("item_type"),
+                action_type: row.get("action_type"),
+                details: row.get("details"),
+                timestamp: row.get("timestamp"),
+            });
+        }
+        Ok(entries)
+    }
 }
+

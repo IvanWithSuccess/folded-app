@@ -1,6 +1,7 @@
 pub mod fs;
 
-use dav_server::{DavHandler, memls::MemLs};
+use dav_server::{DavHandler, fakels::FakeLs};
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use anyhow::Result;
@@ -21,20 +22,24 @@ impl WebDavBridge {
         orchestrator: Arc<ClusterOrchestrator>,
         session_manager: Arc<SessionManager>,
         tmp_dir: std::path::PathBuf,
+        app_handle: Option<tauri::AppHandle>,
     ) -> Self {
-        let ls = MemLs::new();
+        let ls = FakeLs::new();
         let fs = ClusterFs {
             cache,
             orchestrator,
             session_manager,
             tmp_dir,
+            app_handle,
         };
+
         
         let handler = DavHandler::builder()
             .filesystem(Box::new(fs))
             .locksystem(ls)
             .autoindex(true)
             .build_handler();
+
 
         Self { handler }
     }

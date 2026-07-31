@@ -373,9 +373,26 @@ impl SessionManager {
             let session = active.remove(idx);
             let _ = session.client.invoke(&tl::functions::auth::LogOut {}).await;
             session.client.disconnect();
-            // Also delete session file
-            let path = self.storage_path.join(format!("{}.session", account_id));
-            let _ = std::fs::remove_file(path);
+        }
+
+        // 1. Remove from accounts.json metadata immediately (unconditional)
+        let accounts = self.load_accounts_metadata();
+        let surviving: Vec<TelegramAccount> = accounts.into_iter()
+            .filter(|a| a.id != account_id)
+            .collect();
+        let _ = self.save_accounts_metadata(&surviving);
+
+        // 2. Wait a brief moment for the client task and file lock to release
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        // 3. Delete session database file (unconditional)
+        let path = self.storage_path.join(format!("{}.session", account_id));
+        if path.exists() {
+            if let Err(e) = std::fs::remove_file(&path) {
+                log::error!("Failed to remove session file {}: {}", path.display(), e);
+            } else {
+                log::info!("Successfully deleted session database file for {}", account_id);
+            }
         }
         Ok(())
     }

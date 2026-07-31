@@ -13,13 +13,17 @@
     "windows": [
         {
           "label": "main",
-          "title": "Folded Cloud",
-          "width": 1080,
+          "title": "",
+          "hiddenTitle": true,
+          "width": 1050,
           "height": 720,
           "resizable": true,
-          "transparent": false
+          "transparent": true,
+          "titleBarStyle": "Overlay"
         }
     ],
+
+
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https: data:; video-src 'self' asset: http://asset.localhost https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http: https: ws: wss:;",
       "assetProtocol": {
@@ -32,7 +36,10 @@
           "windows": ["main"],
           "permissions": [
             "core:default",
+            "core:window:default",
+            "core:window:allow-start-dragging",
             "dialog:default",
+
             "dialog:allow-open",
             "dialog:allow-confirm",
             "dialog:allow-message"

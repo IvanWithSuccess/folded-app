@@ -215,7 +215,10 @@ pub async fn delete_file_with_all_versions(
         if let Err(e) = cluster_state.delete_file(
             version.clone(),
             Arc::clone(&session_state),
+            None,
+            None,
         ).await {
+
             log::warn!("Could not delete version {} from Telegram: {}", version.id, e);
         }
         if let Err(e) = cache_state.delete_file(&version.id).await {

@@ -1,8 +1,10 @@
 use std::process::Command;
 #[allow(unused_imports)]
 use anyhow::{Result, anyhow};
+#[allow(unused_imports)]
 #[cfg(target_os = "macos")]
 use std::fs;
+
 
 #[allow(unused_variables)]
 pub fn mount_drive(port: u16, drive_letter: &str, _custom_path: Option<String>) -> Result<()> {
@@ -21,47 +23,27 @@ pub fn mount_drive(port: u16, drive_letter: &str, _custom_path: Option<String>) 
 
     #[cfg(target_os = "macos")]
     {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        let mount_point = format!("{}/FoldedCloud", home);
-        
-        // Simplified URL for more reliable mounting
-        let url = format!("http://127.0.0.1:{}/FoldedCloud", port);
-        
-        log::info!("macOS: Attempting to unmount any existing volume at {}", mount_point);
-        let _ = Command::new("diskutil").args(["unmount", "force", &mount_point]).status();
-        
-        // Ensure mount point directory exists and is empty
-        let _ = fs::create_dir_all(&mount_point);
+        let url = format!("http://127.0.0.1:{}", port);
 
-        log::info!("macOS: Mounting WebDAV volume to {}: {}", mount_point, url);
+        log::info!("macOS: Mounting WebDAV volume to Finder: {}", url);
 
-        // Try mount_webdav synchronously to check for errors
-        let mount_status = Command::new("mount_webdav")
-            .args(["-S", &url, &mount_point])
-            .status();
-            
-        match mount_status {
-            Ok(status) if status.success() => {
-                log::info!("macOS: mount_webdav successful for {}", mount_point);
-            }
-            _ => {
-                log::warn!("macOS: mount_webdav failed, falling back to Finder mount");
-                // Finder fallback usually mounts to /Volumes/FoldedCloud
-                let _ = Command::new("osascript")
-                    .args(["-e", &format!("tell application \"Finder\" to mount volume \"{}\"", url)])
-                    .spawn();
-            }
-        }
-        log::info!("macOS: Virtual drive mount process initiated for {}", mount_point);
+        // Eject any stale 127.0.0.1 disks first to prevent macOS from creating /Volumes/127.0.0.1-1
+        let _ = Command::new("osascript")
+            .args(["-e", "tell application \"Finder\" to repeat with d in (get disks)\n if name of d starts with \"127.0.0.1\" then eject d\n end repeat"])
+            .output();
+
+        // Native Finder mount volume command (mounts cleanly to /Volumes/127.0.0.1)
+        let script = format!("tell application \"Finder\" to mount volume \"{}\"", url);
+        let _ = Command::new("osascript").args(["-e", &script]).spawn();
+
+        log::info!("macOS: Virtual drive mount process initiated.");
     }
+
 
     #[cfg(target_os = "linux")]
     {
         let url = format!("dav://localhost:{}", port);
-        // Using gvfs-mount (gio mount) for Linux desktop integration
-        let _ = Command::new("gio")
-            .args(["mount", &url])
-            .spawn();
+        let _ = Command::new("gio").args(["mount", &url]).spawn();
     }
 
     Ok(())
@@ -75,24 +57,21 @@ pub fn unmount_drive(_drive_letter: &str, _custom_path: Option<String>) -> Resul
     
     #[cfg(target_os = "macos")]
     {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        let mount_point = format!("{}/FoldedCloud", home);
-
-        log::info!("macOS: Attempting to unmount via Finder and diskutil at {}", mount_point);
-        // Try Finder eject first (cleanest)
+        log::info!("macOS: Unmounting WebDAV volumes via Finder and diskutil");
+        let _ = Command::new("osascript")
+            .args(["-e", "tell application \"Finder\" to if exists disk \"127.0.0.1\" then eject disk \"127.0.0.1\""])
+            .spawn();
         let _ = Command::new("osascript")
             .args(["-e", "tell application \"Finder\" to if exists disk \"FoldedCloud\" then eject disk \"FoldedCloud\""])
             .spawn();
-        
-        // Fallback: force unmount the specific local folder mount point
-        let _ = Command::new("diskutil").args(["unmount", "force", &mount_point]).spawn();
-        
-        // Also cleanup system /Volumes just in case
+
+        let _ = Command::new("diskutil").args(["unmount", "force", "/Volumes/127.0.0.1"]).spawn();
         let _ = Command::new("diskutil").args(["unmount", "force", "/Volumes/FoldedCloud"]).spawn();
     }
 
     Ok(())
 }
+
 
 pub fn set_autostart(enabled: bool) -> Result<()> {
     #[cfg(target_os = "macos")]

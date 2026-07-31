@@ -36,10 +36,10 @@ interface AppStore {
   setNodeStatus: (status: 'ONLINE' | 'OFFLINE') => void;
   setActiveTask: (task: string | null, progress?: number) => void;
   navigateToPath: (accountId: string, path: (string | null)[], revealId?: string | null) => void;
-  setMirrorStatus: (id: string, status: string) => void;
+
   setQueueTasks: (tasks: PersistentTask[]) => void;
   updateQueueTask: (taskId: string, status: string, error?: string) => void;
-  activeMirrors: Record<string, string>;
+
   logoutAccount: (id: string) => void;
   clearNavigation: () => void;
 
@@ -73,7 +73,7 @@ export const useAppStore = create<AppStore>()(
       taskProgress: 0,
       queueTasks: [],
 
-      theme: 'deep_dark',
+      theme: 'apple_light',
       setTheme: (themeId) => set({ theme: themeId }),
 
       viewMode: 'columns',
@@ -105,13 +105,7 @@ export const useAppStore = create<AppStore>()(
       
       clearNavigation: () => set({ navigationPath: null, pendingRevealId: null }),
       
-      activeMirrors: {},
-      setMirrorStatus: (id, status) => set((state) => ({
-        activeMirrors: {
-          ...state.activeMirrors,
-          [id]: status
-        }
-      })),
+
       setQueueTasks: (tasks) => set({ queueTasks: tasks }),
       updateQueueTask: (taskId, status, error) => set((state) => ({
         queueTasks: state.queueTasks.map(t => 

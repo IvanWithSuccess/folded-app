@@ -39,9 +39,23 @@ impl ClusterOrchestrator {
         let total_size = metadata.len();
         
         let upload_id = external_upload_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        
+        let task_payload = serde_json::json!({
+            "file_name": file_name.clone(),
+            "file_path": file_path.to_string_lossy(),
+            "account_id": account_id.clone()
+        }).to_string();
+
+        let task_id = cache.enqueue_task("UPLOAD_FILE", &task_payload).await.unwrap_or_else(|_| upload_id.clone());
+        let _ = cache.update_task_status(&task_id, "RUNNING", None).await;
+        if let Some(ref handle) = app_handle {
+            let _ = handle.emit("task-status-change", serde_json::json!({ "id": task_id, "status": "RUNNING" }));
+        }
+
         let mut upload_tasks: Vec<tokio::task::JoinHandle<Result<Option<ChunkMeta>, anyhow::Error>>> = Vec::new();
         
         let total_uploaded = Arc::new(tokio::sync::Mutex::new(0u64));
+
 
         for (part_index, account_id, chunk_size) in plan {
             let file_path = file_path.clone();
@@ -141,11 +155,33 @@ impl ClusterOrchestrator {
         }
 
         let mut chunks = Vec::new();
+        let mut upload_err = None;
         for task in upload_tasks {
-            let result = task.await??;
-            if let Some(chunk_meta) = result {
-                chunks.push(chunk_meta);
+            match task.await {
+                Ok(Ok(Some(chunk_meta))) => {
+                    chunks.push(chunk_meta);
+                }
+                Ok(Ok(None)) => {}
+                Ok(Err(e)) => {
+                    upload_err = Some(e.to_string());
+                }
+                Err(e) => {
+                    upload_err = Some(e.to_string());
+                }
             }
+        }
+        
+        if let Some(err_msg) = upload_err {
+            let _ = cache.update_task_status(&task_id, "FAILED", Some(&err_msg)).await;
+            if let Some(ref handle) = app_handle {
+                let _ = handle.emit("task-status-change", serde_json::json!({ "id": task_id, "status": "FAILED", "error": err_msg }));
+            }
+            return Err(anyhow!("Upload failed: {}", err_msg));
+        }
+
+        let _ = cache.update_task_status(&task_id, "COMPLETED", None).await;
+        if let Some(ref handle) = app_handle {
+            let _ = handle.emit("task-status-change", serde_json::json!({ "id": task_id, "status": "COMPLETED" }));
         }
         
         chunks.sort_by_key(|c| c.part_index);
@@ -171,6 +207,7 @@ impl ClusterOrchestrator {
 
         Ok(manifest)
     }
+
 
     pub async fn download_file(
         &self,
@@ -357,17 +394,49 @@ impl ClusterOrchestrator {
         &self,
         manifest: FileManifest,
         session_manager: Arc<crate::session_manager::SessionManager>,
+        cache: Option<Arc<crate::cache::MetadataCache>>,
+        app_handle: Option<tauri::AppHandle>,
     ) -> Result<()> {
+        let task_id = if let Some(ref c) = cache {
+            let payload = serde_json::json!({
+                "file_name": manifest.name.clone(),
+                "file_id": manifest.id.clone()
+            }).to_string();
+            let tid = c.enqueue_task("DELETE_FILE", &payload).await.ok();
+            if let Some(ref tid_str) = tid {
+                let _ = c.update_task_status(tid_str, "RUNNING", None).await;
+            }
+            if let Some(ref handle) = app_handle {
+                let _ = handle.emit("task-status-change", serde_json::json!({ "id": tid, "status": "RUNNING" }));
+            }
+            tid
+        } else {
+            None
+        };
+
         use std::collections::HashMap;
+
+        // Check if any message_ids are referenced in existing snapshots
+        let snapshot_protected_ids = if let Some(ref c) = cache {
+            c.get_all_snapshot_message_ids().await.unwrap_or_default()
+        } else {
+            std::collections::HashSet::new()
+        };
         
         let mut chunks_by_account: HashMap<String, Vec<i32>> = HashMap::new();
         for chunk in manifest.chunks {
-            chunks_by_account.entry(chunk.account_id).or_default().push(chunk.message_id as i32);
+            let msg_id = chunk.message_id as i32;
+            if snapshot_protected_ids.contains(&msg_id) {
+                log::info!("Preserving chunk message_id {} in Telegram because it is referenced in a snapshot", msg_id);
+                continue;
+            }
+            chunks_by_account.entry(chunk.account_id).or_default().push(msg_id);
         }
 
         for (account_id, message_ids) in chunks_by_account {
+            if message_ids.is_empty() { continue; }
             if let Some(client) = session_manager.get_client_by_id(&account_id).await {
-                log::info!("Deleting {} chunks from account {}", message_ids.len(), account_id);
+                log::info!("Deleting {} unreferenced chunks from account {}", message_ids.len(), account_id);
                 let _ = client.invoke(&tl::functions::messages::DeleteMessages {
                     id: message_ids,
                     revoke: true,
@@ -375,6 +444,17 @@ impl ClusterOrchestrator {
             }
         }
 
+
+        if let Some(ref c) = cache {
+            if let Some(ref tid_str) = task_id {
+                let _ = c.update_task_status(tid_str, "COMPLETED", None).await;
+            }
+        }
+        if let Some(ref handle) = app_handle {
+            let _ = handle.emit("task-status-change", serde_json::json!({ "id": task_id, "status": "COMPLETED" }));
+        }
+
         Ok(())
     }
 }
+

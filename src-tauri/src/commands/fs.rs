@@ -90,6 +90,7 @@ pub async fn list_folder_content(
 
 #[tauri::command]
 pub async fn delete_folder(
+    app: tauri::AppHandle,
     session_state: State<'_, Arc<SessionManager>>,
     cluster_state: State<'_, Arc<ClusterOrchestrator>>,
     cache_state: State<'_, Arc<MetadataCache>>,
@@ -119,12 +120,15 @@ pub async fn delete_folder(
     // Spawn a background task to clean up files from Telegram
     let session_arc = Arc::clone(&session_state);
     let cluster_arc = Arc::clone(&cluster_state);
+    let cache_arc = Arc::clone(&cache_state);
+    let app_handle = app.clone();
     
     tokio::spawn(async move {
         log::info!("Starting background cleanup of {} files from deleted folder", files_to_delete.len());
         for file in files_to_delete {
             let session = Arc::clone(&session_arc);
-            if let Err(e) = cluster_arc.delete_file(file, session).await {
+            let cache = Arc::clone(&cache_arc);
+            if let Err(e) = cluster_arc.delete_file(file, session, Some(cache), Some(app_handle.clone())).await {
                 log::warn!("Failed to delete file from Telegram during background folder delete: {}", e);
             }
         }
@@ -133,6 +137,7 @@ pub async fn delete_folder(
 
     Ok(())
 }
+
 
 #[tauri::command]
 pub async fn rename_item(
@@ -232,3 +237,12 @@ pub async fn get_item_history(
 ) -> Result<Vec<crate::cache::ActivityEntry>, String> {
     cache_state.get_item_history(&item_id).await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_recent_activity(
+    cache_state: State<'_, Arc<MetadataCache>>,
+    limit: Option<i64>,
+) -> Result<Vec<crate::cache::ActivityEntry>, String> {
+    cache_state.get_recent_activity(limit.unwrap_or(30)).await.map_err(|e| e.to_string())
+}
+

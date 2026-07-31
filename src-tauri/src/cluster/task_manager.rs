@@ -54,12 +54,25 @@ impl TaskManager {
 
     pub async fn start(self: Arc<Self>) {
         log::info!("Task Manager started.");
+        
+        // Clear all tasks from previous app runs so we start fresh and don't flood on boot
+        if let Err(e) = sqlx::query("DELETE FROM pending_tasks").execute(self.cache.get_pool()).await {
+            log::error!("Failed to clear pending tasks on startup: {}", e);
+        }
+
         loop {
             if let Err(e) = self.process_pending_tasks().await {
+                let err_msg = e.to_string();
+                if err_msg.contains("code: 26") || err_msg.contains("not a database") {
+                    log::warn!("Task Manager loop paused due to database reset (code 26).");
+                    sleep(Duration::from_secs(10)).await;
+                    continue;
+                }
                 log::error!("Task Manager loop error: {}", e);
             }
             sleep(Duration::from_secs(5)).await;
         }
+
     }
 
     async fn process_pending_tasks(&self) -> Result<()> {
@@ -67,11 +80,20 @@ impl TaskManager {
         let mut running = self.running_tasks.lock().await;
 
         for task in tasks {
+            // Only execute tasks that are in PENDING status
+            if task.status != "PENDING" {
+                continue;
+            }
+            // Limit to maximum 2 concurrent active tasks to avoid database locks
+            if running.len() >= 2 {
+                break;
+            }
             if running.contains(&task.id) {
                 continue;
             }
 
             running.insert(task.id.clone());
+
             let token = CancellationToken::new();
             {
                 let mut tokens = self.cancellation_tokens.lock().await;
@@ -92,6 +114,7 @@ impl TaskManager {
         }
         Ok(())
     }
+
 
     async fn execute_task(&self, task: PendingTask, token: CancellationToken) -> Result<()> {
         log::info!("Executing task {}: {}", task.id, task.task_type);
@@ -138,6 +161,8 @@ impl TaskManager {
         ).await?;
 
         self.cache.save_file(manifest.clone()).await?;
+        let _ = self.cache.update_task_progress(&task.id, 1, 1).await;
+        
         let _ = self.cache.log_activity(
             &manifest.id,
             &manifest.name,
@@ -145,6 +170,9 @@ impl TaskManager {
             "UPLOAD",
             Some(format!("Uploaded from {}", payload.file_path))
         ).await;
+        
+        // Notify frontend to refresh the file tree
+        let _ = self.app.emit("files-changed", serde_json::json!({ "folder_id": manifest.folder_id }));
         
         Ok(())
     }
@@ -156,6 +184,15 @@ impl TaskManager {
         if !root_path.is_dir() {
             return Err(anyhow::anyhow!("Path is not a directory: {}", payload.directory_path));
         }
+
+        let total_files = walkdir::WalkDir::new(&root_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| !e.file_type().is_dir())
+            .count() as i32;
+
+        let mut processed_files = 0;
+        let _ = self.cache.update_task_progress(&task.id, 0, total_files).await;
 
         use std::collections::HashMap;
         let mut folder_mapping: HashMap<std::path::PathBuf, String> = HashMap::new();
@@ -210,6 +247,16 @@ impl TaskManager {
                 ).await?;
                 
                 self.cache.save_file(manifest).await?;
+                processed_files += 1;
+                let _ = self.cache.update_task_progress(&task.id, processed_files, total_files).await;
+                
+                use tauri::Emitter;
+                let _ = self.app.emit("task-status-change", serde_json::json!({
+                    "id": task.id,
+                    "status": "RUNNING",
+                    "processed_files": processed_files,
+                    "total_files": total_files
+                }));
             }
         }
 

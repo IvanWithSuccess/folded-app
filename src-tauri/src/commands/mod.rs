@@ -7,12 +7,32 @@ pub mod settings;
 pub mod cache;
 pub mod mirrors;
 pub mod versions;
+pub mod security;
+pub mod git;
 
 #[macro_export]
 macro_rules! generate_handler {
     () => {
         tauri::generate_handler![
+            $crate::commands::security::trigger_panic_switch,
+            $crate::commands::security::full_logout,
+            $crate::commands::security::get_panic_status,
+            $crate::commands::security::derive_vault_key,
+            $crate::commands::security::create_folder_snapshot,
+            $crate::commands::security::get_vault_info,
+            $crate::commands::security::remount_virtual_drive,
+            $crate::commands::security::take_snapshot,
+            $crate::commands::security::list_snapshots,
+            $crate::commands::security::delete_snapshot,
+            $crate::commands::security::restore_snapshot,
+            $crate::commands::security::get_snapshot_schedule,
+            $crate::commands::security::set_snapshot_schedule,
+
+
+
+
             $crate::commands::auth::auth_request_code,
+
             $crate::commands::auth::auth_verify_code,
             $crate::commands::auth::auth_verify_password,
             $crate::commands::auth::auth_request_qr,
@@ -36,7 +56,9 @@ macro_rules! generate_handler {
             $crate::commands::fs::toggle_item_starred,
             $crate::commands::fs::get_category_content,
             $crate::commands::fs::get_item_history,
+            $crate::commands::fs::get_recent_activity,
             $crate::commands::fs::get_active_tasks,
+
             
             $crate::commands::notes::get_notes,
             $crate::commands::notes::update_note,
@@ -78,17 +100,45 @@ macro_rules! generate_handler {
             $crate::commands::cache::clear_file_cache,
             $crate::commands::cache::evict_cache,
 
-            $crate::commands::mirrors::get_mirror_rules,
-            $crate::commands::mirrors::add_mirror_rule,
-            $crate::commands::mirrors::remove_mirror_rule,
-            $crate::commands::mirrors::toggle_mirror_rule,
 
             $crate::commands::versions::get_file_versions,
             $crate::commands::versions::restore_file_version,
             $crate::commands::versions::download_file_version,
             $crate::commands::versions::get_folder_history,
             $crate::commands::versions::restore_deleted_item,
-            $crate::commands::versions::delete_file_with_all_versions
+            $crate::commands::versions::delete_file_with_all_versions,
+
+            $crate::commands::git::list_repositories,
+            $crate::commands::git::create_repository,
+            $crate::commands::git::delete_repository,
+            $crate::commands::git::get_repository_status,
+            $crate::commands::git::get_file_diff,
+            $crate::commands::git::commit_changes,
+            $crate::commands::git::push_commits,
+            $crate::commands::git::pull_commits,
+            $crate::commands::git::clone_repository,
+            $crate::commands::git::get_repository_history,
+            $crate::commands::git::discover_telegram_repositories,
+            $crate::commands::git::read_folded_config,
+            $crate::commands::git::delete_remote_repository,
+            $crate::commands::git::update_repository_settings,
+            $crate::commands::git::get_commit_file_diff,
+            $crate::commands::git::checkout_repository_commit,
+            $crate::commands::git::list_branches,
+            $crate::commands::git::create_branch,
+            $crate::commands::git::delete_branch,
+            $crate::commands::git::switch_branch,
+            $crate::commands::git::get_branch_history,
+            $crate::commands::git::merge_branch,
+            $crate::commands::git::check_account_manifests,
+            $crate::commands::git::get_repo_account_status,
+            $crate::commands::git::relink_repository,
+            $crate::commands::git::read_ignored_patterns,
+            $crate::commands::git::save_ignored_patterns,
+            $crate::commands::git::check_remote_updates,
+            $crate::commands::git::read_merge_state,
+            $crate::commands::git::resolve_conflict,
+            $crate::commands::git::abort_merge
         ]
     };
 }

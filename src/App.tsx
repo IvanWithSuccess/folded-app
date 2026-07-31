@@ -4,20 +4,18 @@ import { useAppInitialization } from './hooks/useAppInitialization';
 import { useTaskSync } from './hooks/useTaskSync';
 
 // Components
-import { Sidebar } from './components/Sidebar/Sidebar';
-import { FileManager } from './components/FileManager';
-import { NotesView } from './components/NotesView';
-import { AccountManager } from './components/AccountManager';
 import { LoginModal } from './components/LoginModal';
 import { SyncSplashScreen } from './components/SyncSplashScreen';
 import { OnboardingStorage } from './components/OnboardingStorage';
-import { SettingsView } from './components/SettingsView';
-import { MirrorsView } from './components/MirrorsView';
+import { GitDashboard } from './components/GitDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+
 
 // UI
 import { applyTheme } from './theme/themes';
 import { Loader2 } from 'lucide-react';
+import appIcon from './assets/app-icon.png';
 
 function App() {
   const { 
@@ -64,6 +62,36 @@ function App() {
     initialize();
   }, [initialize, setTheme]);
 
+  // Listen for window resize to toggle body.is-fullscreen class
+  useEffect(() => {
+    const updateFullscreenState = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        const fullscreen = await win.isFullscreen();
+        const maximized = await win.isMaximized();
+        if (fullscreen || maximized) {
+          document.body.classList.add('is-fullscreen');
+        } else {
+          document.body.classList.remove('is-fullscreen');
+        }
+      } catch (e) {
+        const isFS = window.innerHeight === window.screen.height;
+        if (isFS) {
+          document.body.classList.add('is-fullscreen');
+        } else {
+          document.body.classList.remove('is-fullscreen');
+        }
+      }
+    };
+
+    updateFullscreenState();
+    window.addEventListener('resize', updateFullscreenState);
+    return () => {
+      window.removeEventListener('resize', updateFullscreenState);
+    };
+  }, []);
+
   // Listen for backend progress events
   useEffect(() => {
     let unlistenFuncs: (() => void)[] = [];
@@ -91,11 +119,6 @@ function App() {
         });
         unlistenFuncs.push(uDownload);
 
-        const uMirror = await listen<{ id: string; status: string }>('mirror-status-update', (event) => {
-          if (!isMounted) return;
-          useAppStore.getState().setMirrorStatus(event.payload.id, event.payload.status);
-        });
-        unlistenFuncs.push(uMirror);
 
         const uTaskStatus = await listen<{ id: string; status: string }>('task-status-change', (event) => {
           if (!isMounted) return;
@@ -107,10 +130,21 @@ function App() {
         });
         unlistenFuncs.push(uTaskStatus);
 
+        const uPanic = await listen<boolean>('panic-status-changed', (event) => {
+          if (!isMounted) return;
+          if (event.payload) {
+            useAppStore.getState().setAccounts([]);
+            useAppStore.getState().setAppState('AUTH');
+          }
+        });
+        unlistenFuncs.push(uPanic);
+
+
       } catch (e) {
         console.error('Failed to setup global listeners:', e);
       }
     };
+
 
     setupListeners();
 
@@ -147,12 +181,25 @@ function App() {
   // Global Overlay States (Startup, Auth, Sync, Onboarding)
   if (appState === 'STARTUP') {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-zinc-600">
-        <Loader2 className="animate-spin mb-4" size={32} />
-        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Establishing Network Connection</span>
+      <div 
+        data-tauri-drag-region
+        className="h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f7] select-none font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text','SF_Pro_Display','Helvetica_Neue',sans-serif] window-frame"
+      >
+        <div className="relative w-16 h-16 flex items-center justify-center mb-5">
+          <img 
+            src={appIcon} 
+            alt="Folded Vault" 
+            className="w-14 h-14 rounded-xl border border-black/[0.04] shadow-md bg-white p-1.5 object-contain"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Loader2 className="animate-spin text-[#007aff]" size={14} strokeWidth={2.5} />
+          <span className="text-[10px] font-bold text-[#86868b] uppercase tracking-[0.15em]">Connecting Node...</span>
+        </div>
       </div>
     );
   }
+
 
   if (appState === 'AUTH') {
     return (
@@ -186,62 +233,12 @@ function App() {
 
   // --- Main Ready State ---
   return (
-    <div className="flex h-screen w-screen overflow-hidden font-sans bg-background text-foreground">
-      {/* Global Sidebar (Zustand-connected) */}
-      <ErrorBoundary name="SIDEBAR">
-        <Sidebar />
-      </ErrorBoundary>
-
-      {/* Main Content Area */}
-      <main className="flex-1 h-full flex flex-col overflow-hidden relative">
-        <AnimateContent key={activeView}>
-           {activeView === 'FILES' && (
-             <ErrorBoundary name="FILE_MANAGER">
-               <FileManager />
-             </ErrorBoundary>
-           )}
-           {activeView === 'PHOTOS' && (
-             <ErrorBoundary name="FILE_MANAGER_PHOTOS">
-               <FileManager category="PHOTOS" />
-             </ErrorBoundary>
-           )}
-           {activeView === 'DOCUMENTS' && (
-             <ErrorBoundary name="FILE_MANAGER_DOCS">
-               <FileManager category="DOCUMENTS" />
-             </ErrorBoundary>
-           )}
-           {activeView === 'STARRED' && (
-             <ErrorBoundary name="FILE_MANAGER_STARRED">
-               <FileManager category="STARRED" />
-             </ErrorBoundary>
-           )}
-           {activeView === 'NOTES' && (
-             <ErrorBoundary name="NOTES_VIEW">
-               <NotesView />
-             </ErrorBoundary>
-           )}
-           {activeView === 'ACCOUNTS' && (
-             <ErrorBoundary name="ACCOUNT_MANAGER">
-               <AccountManager 
-                 onAccountsEmpty={() => setAppState('AUTH')} 
-               />
-             </ErrorBoundary>
-           )}
-           {activeView === 'MIRRORS' && (
-             <ErrorBoundary name="MIRRORS_VIEW">
-               <MirrorsView />
-             </ErrorBoundary>
-           )}
-           {activeView === 'SETTINGS' && (
-             <ErrorBoundary name="SETTINGS_VIEW">
-               <SettingsView />
-             </ErrorBoundary>
-           )}
-        </AnimateContent>
-      </main>
-    </div>
+    <ErrorBoundary name="GIT_DASHBOARD">
+      <GitDashboard />
+    </ErrorBoundary>
   );
 }
+
 
 // Simple internal wrapper for transitions if needed
 const AnimateContent: React.FC<{ children: React.ReactNode }> = ({ children }) => (

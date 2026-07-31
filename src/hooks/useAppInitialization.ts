@@ -72,30 +72,7 @@ export function useAppInitialization() {
       // Set active account to the first one by default
       setActiveAccount(healthyAccounts[0].id);
       
-      // Set to SYNCING state to show splash screen
-      setAppState('SYNCING');
-      setActiveView('FILES');
-      
-      // Sync all accounts to ensure the cluster is fully hydrated
-      for (let i = 0; i < healthyAccounts.length; i++) {
-        const acc = healthyAccounts[i];
-        const accountName = acc.name || acc.phone || `Node ${i+1}`;
-        const stepSize = 100 / healthyAccounts.length;
-        const currentBase = i * stepSize;
-        
-        setSyncStatus(`Contacting ${accountName}...`, currentBase + (stepSize * 0.2));
-        await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for visual feedback
-        
-        setSyncStatus(`Syncing Node: ${accountName}`, currentBase + (stepSize * 0.5));
-        await invoke('sync_account', { accountId: acc.id });
-        
-        setSyncStatus(`Node ${accountName} Ready`, currentBase + stepSize);
-      }
-      
-      setSyncStatus('Cluster Synchronized', 100);
-      
-      // Give the user a moment to see the 100% state
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Go directly to READY state (no syncing screen needed for local Git repositories)
       setAppState('READY');
     } catch (e) {
       console.error('Initialization failed:', getErrorMessage(e));

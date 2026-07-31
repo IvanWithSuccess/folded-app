@@ -42,40 +42,45 @@ export const SyncSplashScreen: React.FC<SyncSplashScreenProps> = ({ onComplete, 
   }, [progress, onComplete]);
 
   return (
-    <div className="fixed inset-0 bg-[#09090b] flex flex-col items-center justify-center z-[3000]">
-      {/* Background stays clean and dark */}
-      <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
-        
-        {/* Minimal Core Icon */}
-        <div className="relative w-24 h-24 flex items-center justify-center mb-12">
-          <div className="absolute inset-0 rounded-2xl border border-zinc-800 bg-zinc-900/20" />
+    <div 
+      data-tauri-drag-region
+      className="fixed inset-0 bg-[#f5f5f7]/40 backdrop-blur-2xl flex flex-col items-center justify-center z-[3000] p-6 select-none font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text','SF_Pro_Display','Helvetica_Neue',sans-serif]"
+    >
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-xs bg-white rounded-2xl border border-black/10 shadow-2xl p-7 flex flex-col items-center text-[#1d1d1f]"
+      >
+        {/* Core Icon */}
+        <div className="relative w-14 h-14 flex items-center justify-center mb-5">
+          <div className="absolute inset-0 rounded-xl border border-black/[0.04] bg-[#f5f5f7] shadow-inner" />
           {showCheck ? (
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-              <CheckCircle2 size={40} className="text-blue-500" strokeWidth={1.5} />
+              <CheckCircle2 size={26} className="text-[#34c759]" strokeWidth={2.5} />
             </motion.div>
           ) : (
-            <div className="relative">
-              <Cloud size={40} strokeWidth={1} className="text-zinc-700" />
+            <div className="relative flex items-center justify-center">
+              <Cloud size={24} strokeWidth={2.5} className="text-[#007aff]" />
               <motion.div 
                 animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="absolute -inset-4 rounded-full border border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent"
+                transition={{ duration: 1.8, repeat: Infinity, ease: "linear" }}
+                className="absolute -inset-3.5 rounded-full border border-t-[#007aff] border-r-transparent border-b-transparent border-l-transparent"
               />
             </div>
           )}
         </div>
 
-        {/* Text Area - Clean Typography */}
-        <div className="text-center space-y-2 mb-10">
-          <h1 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">System Synchronization</h1>
+        {/* Text Area */}
+        <div className="text-center space-y-1.5 mb-5 w-full">
+          <h1 className="text-[12px] font-semibold text-[#1d1d1f] tracking-tight">System Synchronization</h1>
           <div className="flex items-center justify-center gap-2 h-4 overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.span 
                 key={currentLogIdx}
-                initial={{ opacity: 0, y: 5 }}
+                initial={{ opacity: 0, y: 3 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="text-[9px] font-mono text-zinc-500 uppercase"
+                exit={{ opacity: 0, y: -3 }}
+                className="text-[9px] font-mono text-[#86868b] truncate max-w-[200px]"
               >
                 {SYSTEM_LOGS[currentLogIdx]}
               </motion.span>
@@ -83,31 +88,27 @@ export const SyncSplashScreen: React.FC<SyncSplashScreenProps> = ({ onComplete, 
           </div>
         </div>
 
-        {/* Industrial Progress Bar - Matches Account Cards */}
-        <div className="w-full px-8 space-y-3">
-          <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+        {/* Progress Bar */}
+        <div className="w-full space-y-2">
+          <div className="h-1 bg-black/[0.06] rounded-full overflow-hidden">
             <motion.div 
-              className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+              className="h-full bg-[#007aff]"
               initial={{ width: "0%" }}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
             />
           </div>
           
-          <div className="flex justify-between items-center px-0.5">
-            <div className="flex items-center gap-2">
-              <RefreshCw size={10} className={`text-zinc-600 ${!showCheck ? 'animate-spin' : ''}`} />
-              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{status}</span>
-            </div>
-            <span className="text-[9px] font-mono font-bold text-zinc-400">{Math.round(progress)}%</span>
+          <div className="flex justify-between items-center text-[10px] font-semibold">
+            <span className="flex items-center gap-1.5 text-[#86868b]">
+              <RefreshCw size={10} className={`text-[#007aff] ${!showCheck ? 'animate-spin' : ''}`} />
+              <span className="truncate max-w-[140px] font-medium">{status}</span>
+            </span>
+            <span className="font-mono text-[#1d1d1f] font-bold">{Math.round(progress)}%</span>
           </div>
         </div>
-      </div>
-
-      {/* Footer Meta - Very subtle */}
-      <div className="absolute bottom-10 text-[8px] font-bold uppercase tracking-[0.4em] text-zinc-800">
-        Folded Engine v1.0.1 // Node Mesh Active
-      </div>
+      </motion.div>
     </div>
   );
 };
+

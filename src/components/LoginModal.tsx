@@ -3,8 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import QRCode from 'react-qr-code';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, Phone, QrCode, Lock, ShieldCheck, 
-  ChevronLeft, ArrowRight, Loader2, Smartphone, AlertCircle
+  X, Lock, ShieldCheck, Loader2, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
@@ -13,15 +12,12 @@ interface LoginModalProps {
   onSuccess: (accountId?: string) => void;
 }
 
-type AuthStep = 'phone' | 'code' | 'qr' | 'password';
-type AuthMethod = 'phone' | 'qr';
+type AuthStep = 'qr' | 'password';
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) => {
-  const [method, setMethod] = useState<AuthMethod>('qr');
   const [step, setStep] = useState<AuthStep>('qr');
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('QR Login');
   const [qrUri, setQrUri] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,18 +25,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
   // Auto-request QR on mount
   useEffect(() => {
     if (step === 'qr' && !qrUri) {
-        handleRequestQR();
+      handleRequestQR();
     }
-  }, [step]); // Depend on step for manual transitions
+  }, [step]);
 
-  // Cleanup on unmount: ensure no pending auths leak memory/sessions
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       invoke('auth_cancel').catch(e => console.error('Failed to cancel auth on cleanup:', e));
     };
   }, []);
 
-  // Auto-refresh QR every 115 seconds (Telegram QRs usually last 2 mins)
+  // Auto-refresh QR every 115 seconds
   useEffect(() => {
     let refreshTimer: number;
     if (step === 'qr' && qrUri) {
@@ -58,73 +54,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
       pollInterval = window.setInterval(async () => {
         try {
           const response: any = await invoke('auth_poll_qr');
-            if (response.Success) {
-              clearInterval(pollInterval);
-              onSuccess(response.Success.id);
-              onClose();
-            } else if (response === 'PasswordRequired') {
-              clearInterval(pollInterval);
-              setPhone("QR Login"); 
-              setStep('password');
-            } else if (response.Error) {
-              if (response.Error.toLowerCase().includes("expired") || response.Error.includes("No pending QR")) {
-                clearInterval(pollInterval);
-                handleRequestQR();
-              } else {
-                setError(response.Error);
-              }
-            }
-          } catch (e: any) {
-            const errStr = e.toString().toLowerCase();
-            if (errStr.includes("expired") || errStr.includes("timeout") || errStr.includes("no pending")) {
+          if (response.Success) {
+            clearInterval(pollInterval);
+            onSuccess(response.Success.id);
+            onClose();
+          } else if (response === 'PasswordRequired') {
+            clearInterval(pollInterval);
+            setPhone('QR Login'); 
+            setStep('password');
+          } else if (response.Error) {
+            if (response.Error.toLowerCase().includes('expired') || response.Error.includes('No pending QR')) {
               clearInterval(pollInterval);
               handleRequestQR();
             } else {
-              console.error('QR Poll error:', e);
+              setError(response.Error);
             }
           }
-        }, 3000);
+        } catch (e: any) {
+          const errStr = e.toString().toLowerCase();
+          if (errStr.includes('expired') || errStr.includes('timeout') || errStr.includes('no pending')) {
+            clearInterval(pollInterval);
+            handleRequestQR();
+          } else {
+            console.error('QR Poll error:', e);
+          }
+        }
+      }, 3000);
     }
     return () => clearInterval(pollInterval);
   }, [step, qrUri]);
 
-  const handleRequestCode = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      await invoke('auth_request_code', { phone });
-      setStep('code');
-    } catch (e: any) {
-      setError(e.toString());
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response: any = await invoke('auth_verify_code', { phone, code });
-      if (response.Success) {
-        onSuccess(response.Success.id);
-        onClose();
-      } else if (response === 'PasswordRequired') {
-        setStep('password');
-      } else if (response.Error) {
-        setError(response.Error);
-      }
-    } catch (e: any) {
-      setError(e.toString());
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRequestQR = async () => {
-    setMethod('qr');
     setLoading(true);
-    setQrUri(''); // Clear old QR immediately
+    setQrUri('');
     setError('');
     try {
       const response: any = await invoke('auth_request_qr');
@@ -140,6 +102,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
   };
 
   const handleVerifyPassword = async () => {
+    if (!password) {
+      setError('Please enter your Telegram 2FA Password');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -158,201 +124,129 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose, onSuccess }) =>
   };
 
   return (
-    <div className="fixed inset-0 bg-[#09090b] flex z-[2000] p-6 sm:p-12 overflow-y-auto overflow-x-hidden animate-in fade-in duration-300">
-      {/* Background decoration - subtle zinc/blue glow */}
-      <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-zinc-600/5 blur-[120px] rounded-full"></div>
-      </div>
-
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[800px] m-auto flex flex-col items-center relative z-10"
+    <div className="w-full h-full bg-white text-[#1d1d1f] flex flex-col overflow-hidden select-none font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text','SF_Pro_Display','Helvetica_Neue',sans-serif] window-frame">
+      {/* macOS Window Toolbar Header */}
+      <header
+        data-tauri-drag-region
+        className="h-11 border-b border-black/[0.06] px-3.5 flex items-center justify-between shrink-0 bg-white relative"
       >
-        <div className="w-full max-w-[320px]">
-            <AnimatePresence mode="wait">
-              <motion.div 
-                key={step}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="flex flex-col items-center w-full"
-              >
-                {error && (
-                  <div className="w-full mb-8 p-3 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-3 text-red-400 text-[11px] font-bold uppercase tracking-tight">
-                     <AlertCircle size={14} className="shrink-0" />
-                     {error}
-                  </div>
-                )}
+        <div className="w-16 shrink-0 pointer-events-none" />
 
-                {step === 'qr' && (
-                  <div className="flex flex-col items-center w-full">
-                    <div className="p-4 bg-white rounded-lg shadow-2xl relative mb-10 group transition-all duration-500 hover:scale-[1.02] border-4 border-zinc-900">
-                      {qrUri ? (
-                        <div className="relative">
-                            <QRCode value={qrUri} size={180} level="H" />
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/40 backdrop-blur-[1px]">
-                                <span className="text-[9px] font-black text-black uppercase tracking-widest bg-white/90 px-3 py-1 rounded border border-black/10">Scan with Telegram</span>
-                            </div>
-                        </div>
-                      ) : (
-                        <div className="w-[180px] h-[180px] flex flex-col items-center justify-center bg-zinc-50 rounded gap-4">
-                          <Loader2 size={32} className="animate-spin text-zinc-300" />
-                          <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Generating Link</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-6 text-center w-full">
-                      <div className="space-y-2">
-                        <p className="text-white font-black text-xs uppercase tracking-[0.2em]">Quick Auth Pulse</p>
-                        <p className="text-zinc-500 text-[10px] font-medium leading-relaxed uppercase tracking-widest">
-                          Settings &gt; Devices &gt; Link Desktop
-                        </p>
-                      </div>
-
-                      <div className="relative py-3 flex items-center justify-center">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-zinc-900"></div>
-                        </div>
-                        <span className="relative px-4 bg-[#09090b] text-zinc-700 text-[9px] font-black uppercase tracking-[0.3em]">Identity Hub</span>
-                      </div>
-
-                      <button 
-                         className="w-full py-3.5 text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 hover:text-white hover:bg-zinc-900/50 rounded-lg transition-all flex items-center justify-center gap-3 group border border-zinc-800"
-                         onClick={() => { setStep('phone'); setMethod('phone'); }}
-                      >
-                         <Phone size={14} className="text-zinc-600 group-hover:text-blue-500 transition-colors" />
-                         Use Phone Number
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {step === 'phone' && (
-                    <div className="space-y-6 w-full">
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase tracking-[0.25em] text-zinc-600 ml-1">Identity Terminal</label>
-                      <input 
-                        type="text" 
-                        className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-lg text-white placeholder:text-zinc-800 outline-none focus:border-zinc-600 transition-all font-mono text-sm" 
-                        placeholder="+0 000 000 0000" 
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <button 
-                      className="w-full py-3.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
-                      onClick={handleRequestCode}
-                      disabled={loading}
-                    >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : "Request Access"}
-                      {!loading && <ArrowRight size={14} />}
-                    </button>
-                    
-                    <button 
-                       className="w-full py-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
-                       onClick={() => { setStep('qr'); setMethod('qr'); }}
-                    >
-                       Return to QR
-                    </button>
-                  </div>
-                )}
-
-                {step === 'code' && (
-                  <div className="space-y-8 text-center w-full">
-                    <div className="space-y-4">
-                      <p className="text-[9px] font-black uppercase tracking-[0.25em] text-zinc-600">Verification Code</p>
-                      <input 
-                        type="text" 
-                        className="w-full bg-transparent border-b border-zinc-800 py-4 text-white text-center text-3xl font-mono tracking-[0.5em] outline-none focus:border-blue-500 transition-all" 
-                        placeholder="•••••" 
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        maxLength={5}
-                        autoFocus
-                      />
-                      <p className="text-zinc-500 text-[10px] font-medium uppercase tracking-widest">Awaiting code from Telegram</p>
-                    </div>
-                    
-                    <button 
-                      className="w-full py-3.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
-                      onClick={handleVerifyCode}
-                      disabled={loading}
-                    >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : "Authenticate"}
-                    </button>
-                    
-                    <button 
-                      className="text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
-                      onClick={() => setStep('phone')}
-                    >
-                      Wrong Number?
-                    </button>
-                  </div>
-                )}
-
-                {step === 'password' && (
-                  <div className="space-y-6 w-full">
-                    <div className="space-y-5">
-                      <div className="flex flex-col items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-zinc-900 rounded-lg flex items-center justify-center border border-zinc-800">
-                            <ShieldCheck size={20} className="text-blue-500" />
-                        </div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Security Override</p>
-                        <p className="text-zinc-600 text-[10px] font-medium uppercase tracking-widest text-center px-4">Two-Step Verification Active</p>
-                      </div>
-                      <input 
-                        type="password" 
-                        className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-lg text-white placeholder:text-zinc-800 outline-none focus:border-zinc-600 transition-all text-sm font-mono" 
-                        placeholder="••••••••" 
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <button 
-                      className="w-full py-3.5 bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
-                      onClick={handleVerifyPassword}
-                      disabled={loading}
-                    >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : "Authorize Node"}
-                    </button>
-                    <button 
-                      className="w-full py-2 text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
-                      onClick={() => setStep('phone')}
-                    >
-                      Abort
-                    </button>
-                  </div>
-                )}
-              </motion.div>
-            </AnimatePresence>
-            
-            {/* Stable Return button for secondary accounts */}
-            {useAppStore.getState().accounts.length > 0 && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mt-10 pt-6 border-t border-zinc-900/50 w-full"
-              >
-                <button 
-                  onClick={onClose}
-                  className="w-full py-3.5 text-[9px] font-black uppercase tracking-[0.3em] text-zinc-600 hover:text-zinc-400 transition-all flex items-center justify-center gap-2 group"
-                >
-                  <X size={12} className="group-hover:rotate-90 transition-transform duration-300" />
-                  Abort Auth
-                </button>
-              </motion.div>
-            )}
+        <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none">
+          <h1 className="text-[12px] font-semibold text-[#1d1d1f] tracking-tight">Folded Vault</h1>
         </div>
-      </motion.div>
+
+        {useAppStore.getState().accounts.length > 0 ? (
+          <button 
+            onClick={onClose}
+            className="z-10 p-1 text-[#86868b] hover:text-[#1d1d1f] transition-all cursor-pointer border-0"
+            title="Cancel"
+          >
+            <X size={14} />
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
+      </header>
+
+      {/* Main Login Canvas */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={step}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            className="flex flex-col items-center w-full max-w-[280px]"
+          >
+            {error && (
+              <div className="w-full mb-4 p-2.5 bg-[#ff3b30]/10 border border-[#ff3b30]/20 rounded-xl flex items-center gap-2 text-[#d70015] text-[11px] font-medium">
+                 <AlertCircle size={14} className="shrink-0 text-[#ff3b30]" />
+                 <span className="break-all">{error}</span>
+              </div>
+            )}
+
+            {step === 'qr' && (
+              <div className="flex flex-col items-center w-full space-y-4">
+                <div className="p-4 bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-black/[0.06] relative group transition-all duration-300">
+                  {qrUri ? (
+                    <div className="relative">
+                      <QRCode value={qrUri} size={180} level="H" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/70 backdrop-blur-[1px] rounded-lg">
+                        <span className="text-[10px] font-semibold text-[#1d1d1f] bg-white px-2.5 py-1 rounded-md border border-black/10 shadow-xs">
+                          Scan with Telegram
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-[180px] h-[180px] flex flex-col items-center justify-center bg-[#f5f5f7] rounded-xl gap-2.5">
+                      <Loader2 size={26} className="animate-spin text-[#007aff]" />
+                      <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wider">
+                        Generating QR
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 w-full">
+                  <div className="space-y-0.5">
+                    <h2 className="text-[#1d1d1f] font-bold text-[13px] tracking-tight">Connect via Telegram QR</h2>
+                    <p className="text-[#86868b] text-[11px] font-medium leading-normal px-2">
+                      Open Telegram &gt; Settings &gt; Devices &gt; Link Desktop Device
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={handleRequestQR}
+                    disabled={loading}
+                    className="w-full py-1.5 bg-[#007aff] hover:bg-[#0066cc] active:scale-[0.98] text-white text-[11px] font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs border-0 disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                    Refresh QR Code
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 'password' && (
+              <div className="space-y-3.5 w-full text-center">
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="w-9 h-9 bg-blue-500/10 text-[#007aff] rounded-xl flex items-center justify-center border border-blue-500/20 shadow-xs">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <h2 className="text-[#1d1d1f] font-bold text-[13px] tracking-tight">Two-Step Verification</h2>
+                  <p className="text-[#86868b] text-[11px] font-medium">Enter your Telegram 2FA Cloud Password</p>
+                </div>
+
+                <input 
+                  type="password" 
+                  className="w-full bg-[#f5f5f7] border border-black/[0.06] p-2.5 rounded-lg text-[#1d1d1f] placeholder:text-[#86868b] outline-none focus:border-[#007aff] transition-all text-xs font-mono" 
+                  placeholder="2FA Password..." 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyPassword()}
+                  autoFocus
+                />
+
+                <button 
+                  className="w-full py-2 bg-[#007aff] hover:bg-[#0066cc] text-white text-[11px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-[0.98] shadow-xs cursor-pointer border-0"
+                  onClick={handleVerifyPassword}
+                  disabled={loading}
+                >
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : "Sign In"}
+                </button>
+
+                <button 
+                  className="w-full py-1 text-[11px] font-medium text-[#86868b] hover:text-[#1d1d1f] transition-colors cursor-pointer border-0 bg-transparent"
+                  onClick={() => { setStep('qr'); handleRequestQR(); }}
+                >
+                  Back to QR Scan
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
-
-const Cloudy = ({ size, className }: { size: number, className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17.5 19c2.5 0 4.5-2 4.5-4.5 0-2.4-1.9-4.3-4.3-4.5-1-3.2-3.8-5.5-7.2-5.5-4.2 0-7.5 3.4-7.5 7.5a7.5 7.5 0 0 0 7.5 7.5h7z"/></svg>
-);

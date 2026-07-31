@@ -31,6 +31,9 @@ export const useTaskSync = () => {
           
           if (event.payload.status === 'COMPLETED') {
              fetchTasks(); 
+             setTimeout(() => {
+               if (isMounted) fetchTasks();
+             }, 2000);
           }
         });
         if (isMounted) {

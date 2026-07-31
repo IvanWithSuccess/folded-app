@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::SeekFrom;
 use futures_util::FutureExt;
 use bytes::{Bytes, Buf};
+use tauri::Emitter;
 use crate::cache::{MetadataCache, FolderInfo};
 use crate::session_manager::{SessionManager, TelegramAccount};
 use crate::cluster::{ClusterOrchestrator, FileManifest};
@@ -18,7 +19,9 @@ pub struct ClusterFs {
     pub orchestrator: Arc<ClusterOrchestrator>,
     pub session_manager: Arc<SessionManager>,
     pub tmp_dir: std::path::PathBuf,
+    pub app_handle: Option<tauri::AppHandle>,
 }
+
 
 #[derive(Debug, Clone)]
 enum VirtualEntry {
@@ -45,36 +48,28 @@ impl ClusterFs {
         
         let mut segments: Vec<String> = decoded_path.split('/').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
         
-        // Trick for macOS Finder naming: 
-        // If we mount http://127.0.0.1:9876/FoldedCloud, Finder will name the drive "FoldedCloud".
-        // We need to ignore this first segment if it matches our desired display name.
         if segments.get(0).map(|s| s.as_str()) == Some("FoldedCloud") {
             segments.remove(0);
         }
         
-        // ... (rest of the logic stays same but using decoded segments)
         if segments.is_empty() {
             return Ok(VirtualEntry::Root);
         }
 
         let accounts = self.session_manager.get_active_accounts().await;
-        let account_display_name = segments[0].clone();
-        
-        let target_account = accounts.iter().find(|acc| {
-            Self::get_account_display_name(acc) == account_display_name
-        }).ok_or(FsError::NotFound)?;
-
-        if segments.len() == 1 {
-            return Ok(VirtualEntry::AccountRoot(target_account.clone()));
+        if accounts.is_empty() {
+            return Err(FsError::NotFound);
         }
 
+        // 1. Try Direct Resolution starting from active account root
+        let primary_acc = &accounts[0];
         let mut current_folder_id: Option<String> = None;
-        let account_id = &target_account.id;
+        let mut direct_found = true;
 
-        for (i, segment) in segments.iter().enumerate().skip(1) {
+        for (i, segment) in segments.iter().enumerate() {
             let is_last = i == segments.len() - 1;
 
-            let folders = self.cache.get_folders_in(current_folder_id.clone(), Some(account_id.clone())).await
+            let folders = self.cache.get_folders_in(current_folder_id.clone(), Some(primary_acc.id.clone())).await
                 .map_err(|_| FsError::GeneralFailure)?;
             
             if let Some(folder) = folders.into_iter().find(|f| &f.name == segment) {
@@ -86,7 +81,7 @@ impl ClusterFs {
             }
 
             if is_last {
-                let files = self.cache.get_files_in(current_folder_id.clone(), Some(account_id.clone())).await
+                let files = self.cache.get_files_in(current_folder_id.clone(), Some(primary_acc.id.clone())).await
                     .map_err(|_| FsError::GeneralFailure)?;
                 
                 if let Some(file) = files.into_iter().find(|f| &f.name == segment) {
@@ -94,11 +89,54 @@ impl ClusterFs {
                 }
             }
 
+            direct_found = false;
+            break;
+        }
+
+        if direct_found {
             return Err(FsError::NotFound);
+        }
+
+        // 2. Legacy / Explicit Account Name Prefix Resolution
+        let account_display_name = &segments[0];
+        if let Some(target_account) = accounts.iter().find(|acc| Self::get_account_display_name(acc) == *account_display_name) {
+            if segments.len() == 1 {
+                return Ok(VirtualEntry::AccountRoot(target_account.clone()));
+            }
+
+            let mut current_folder_id: Option<String> = None;
+            let account_id = &target_account.id;
+
+            for (i, segment) in segments.iter().enumerate().skip(1) {
+                let is_last = i == segments.len() - 1;
+
+                let folders = self.cache.get_folders_in(current_folder_id.clone(), Some(account_id.clone())).await
+                    .map_err(|_| FsError::GeneralFailure)?;
+                
+                if let Some(folder) = folders.into_iter().find(|f| &f.name == segment) {
+                    if is_last {
+                        return Ok(VirtualEntry::Folder(folder));
+                    }
+                    current_folder_id = Some(folder.id);
+                    continue;
+                }
+
+                if is_last {
+                    let files = self.cache.get_files_in(current_folder_id.clone(), Some(account_id.clone())).await
+                        .map_err(|_| FsError::GeneralFailure)?;
+                    
+                    if let Some(file) = files.into_iter().find(|f| &f.name == segment) {
+                        return Ok(VirtualEntry::File(file));
+                    }
+                }
+
+                return Err(FsError::NotFound);
+            }
         }
 
         Err(FsError::NotFound)
     }
+
 }
 
 impl DavFileSystem for ClusterFs {
@@ -110,8 +148,9 @@ impl DavFileSystem for ClusterFs {
                 Ok(VirtualEntry::File(manifest)) => {
                     if options.write {
                         if options.truncate || options.create {
-                            self.orchestrator.delete_file(manifest.clone(), Arc::clone(&self.session_manager))
+                            self.orchestrator.delete_file(manifest.clone(), Arc::clone(&self.session_manager), Some(Arc::clone(&self.cache)), self.app_handle.clone())
                                 .await.map_err(|_| FsError::GeneralFailure)?;
+
                             self.cache.delete_file(&manifest.id)
                                 .await.map_err(|_| FsError::GeneralFailure)?;
 
@@ -133,7 +172,9 @@ impl DavFileSystem for ClusterFs {
                                 cache: Arc::clone(&self.cache),
                                 account_id: manifest.account_id.clone().unwrap_or_default(),
                                 folder_id: manifest.folder_id,
+                                app_handle: self.app_handle.clone(),
                             };
+
                             return Ok(Box::new(upload_file) as Box<dyn DavFile>);
                         }
                         return Err(FsError::Forbidden);
@@ -159,9 +200,13 @@ impl DavFileSystem for ClusterFs {
                         let name = path.file_name().ok_or(FsError::GeneralFailure)?;
                         
                         let account_id = match &parent_entry {
+                            VirtualEntry::Root => {
+                                let accounts = self.session_manager.get_active_accounts().await;
+                                accounts.first().map(|a| a.id.clone()).ok_or(FsError::Forbidden)?
+                            }
                             VirtualEntry::AccountRoot(acc) => acc.id.clone(),
                             VirtualEntry::Folder(f) => f.account_id.clone().unwrap_or_default(),
-                            _ => return Err(FsError::Forbidden), // Cannot create file at root
+                            _ => return Err(FsError::Forbidden),
                         };
                         
                         let folder_id = match parent_entry {
@@ -186,8 +231,10 @@ impl DavFileSystem for ClusterFs {
                             cache: Arc::clone(&self.cache),
                             account_id,
                             folder_id,
+                            app_handle: self.app_handle.clone(),
                         };
                         Ok(Box::new(upload_file) as Box<dyn DavFile>)
+
                     } else {
                         Err(FsError::NotFound)
                     }
@@ -209,10 +256,14 @@ impl DavFileSystem for ClusterFs {
             match entry {
                 VirtualEntry::Root => {
                     let accounts = self.session_manager.get_active_accounts().await;
-                    for acc in accounts {
-                        entries.push(Box::new(AccountDavDirEntry { 
-                            name: Self::get_account_display_name(&acc) 
-                        }));
+                    if let Some(primary_acc) = accounts.first() {
+                        let folders = self.cache.get_folders_in(None, Some(primary_acc.id.clone())).await
+                            .map_err(|_| FsError::GeneralFailure)?;
+                        let files = self.cache.get_files_in(None, Some(primary_acc.id.clone())).await
+                            .map_err(|_| FsError::GeneralFailure)?;
+                        
+                        for f in folders { entries.push(Box::new(FolderDavDirEntry { folder: f })); }
+                        for f in files { entries.push(Box::new(FileDavDirEntry { manifest: f })); }
                     }
                 }
                 VirtualEntry::AccountRoot(acc) => {
@@ -270,13 +321,22 @@ impl DavFileSystem for ClusterFs {
             
             let parent_entry = self.resolve_path(&parent_path).await?;
             let (account_id, folder_id) = match parent_entry {
+                VirtualEntry::Root => {
+                    let accounts = self.session_manager.get_active_accounts().await;
+                    let acc = accounts.first().ok_or(FsError::Forbidden)?;
+                    (Some(acc.id.clone()), None)
+                }
                 VirtualEntry::AccountRoot(acc) => (Some(acc.id), None),
                 VirtualEntry::Folder(f) => (f.account_id, Some(f.id)),
-                _ => return Err(FsError::Forbidden), // Cannot create directory here
+                _ => return Err(FsError::Forbidden),
             };
             
-            self.cache.create_folder(name.to_string(), folder_id, account_id)
+            self.cache.create_folder(name.to_string(), folder_id, account_id.clone())
                 .await.map_err(|_| FsError::GeneralFailure)?;
+            
+            if let Some(ref aid) = account_id {
+                let _ = self.orchestrator.push_manifest(aid, Arc::clone(&self.session_manager), Arc::clone(&self.cache)).await;
+            }
             
             Ok(())
         }.boxed()
@@ -284,8 +344,8 @@ impl DavFileSystem for ClusterFs {
     
     fn remove_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            let entry = self.resolve_path(path).await?;
-            if let VirtualEntry::Folder(folder) = entry {
+            let entry = self.resolve_path(path).await;
+            if let Ok(VirtualEntry::Folder(folder)) = entry {
                 // PROTECTION: Block deletion of system folders and mirror targets/ancestors
                 let rules = self.cache.get_mirror_rules().await.map_err(|_| FsError::GeneralFailure)?;
                 
@@ -295,13 +355,17 @@ impl DavFileSystem for ClusterFs {
                 let virtual_path = decoded_path.trim_start_matches("/FoldedCloud/").trim_matches('/');
 
                 for rule in rules {
+                    if !rule.enabled || rule.id.starts_with("rule_vault_") { continue; }
                     let rpath = rule.remote_folder_name.trim_matches('/');
-                    // Block if deleting the folder itself or an ancestor of a mirror
+                    if rpath.is_empty() { continue; }
+
+                    // Block if deleting the folder itself or an ancestor of an active mirror
                     if virtual_path == "Mirrors" || rpath == virtual_path || rpath.starts_with(&format!("{}/", virtual_path)) {
                         log::warn!("WebDAV: Blocked attempt to delete protected folder: {}", virtual_path);
                         return Err(FsError::Forbidden);
                     }
                 }
+
 
                 // 1. Get all file manifests that need to be deleted from Telegram
                 let file_ids = self.cache.delete_folder_recursive(&folder.id)
@@ -310,35 +374,87 @@ impl DavFileSystem for ClusterFs {
                 // 2. Clean up Telegram for each file
                 for fid in file_ids {
                     if let Ok(Some(manifest)) = self.cache.get_file_by_id(&fid).await {
-                        let _ = self.orchestrator.delete_file(manifest, Arc::clone(&self.session_manager)).await;
+                        let _ = self.orchestrator.delete_file(manifest, Arc::clone(&self.session_manager), Some(Arc::clone(&self.cache)), self.app_handle.clone()).await;
                     }
+                }
+
+                if let Some(ref aid) = folder.account_id {
+                    let _ = self.orchestrator.push_manifest(aid, Arc::clone(&self.session_manager), Arc::clone(&self.cache)).await;
                 }
                 
                 Ok(())
             } else {
-                Err(FsError::Forbidden)
+                // Allow non-existent or virtual folder removal requests to succeed for macOS Finder
+                Ok(())
             }
         }.boxed()
     }
     
     fn remove_file<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            let entry = self.resolve_path(path).await?;
-            if let VirtualEntry::File(manifest) = entry {
-                // 1. Delete from Telegram
-                self.orchestrator.delete_file(manifest.clone(), Arc::clone(&self.session_manager))
-                    .await.map_err(|_| FsError::GeneralFailure)?;
+            let entry = self.resolve_path(path).await;
+            if let Ok(VirtualEntry::File(manifest)) = entry {
+                // Fetch and delete all versions of this file to prevent it from reappearing
+                if let Ok(versions) = self.cache.get_all_file_versions_for_delete(&manifest.id).await {
+                    for version in versions {
+                        // 1. Delete from Telegram
+                        let _ = self.orchestrator.delete_file(
+                            version.clone(),
+                            Arc::clone(&self.session_manager),
+                            None, // None to avoid database lock conflicts, we delete manually below
+                            None,
+                        ).await;
+
+                        // 2. Delete from database cache
+                        let _ = self.cache.delete_file(&version.id).await;
+                    }
+                }
+
+                // 3. Delete from local mirror directories if matched
+                let url_str = path.as_url_string();
+                let decoded_path = urlencoding::decode(&url_str).map(|s| s.into_owned()).unwrap_or(url_str);
+                let rel_path_str = decoded_path.trim_start_matches("/FoldedCloud/").trim_start_matches('/');
                 
-                // 2. Delete from local cache
-                self.cache.delete_file(&manifest.id)
-                    .await.map_err(|_| FsError::GeneralFailure)?;
+                if let Ok(rules) = self.cache.get_mirror_rules().await {
+                    for rule in rules {
+                        if !rule.enabled { continue; }
+                        let rpath = rule.remote_folder_name.trim_start_matches('/').trim_end_matches('/');
+                        
+                        let is_match = if rpath.is_empty() {
+                            true
+                        } else {
+                            rel_path_str.starts_with(&format!("{}/", rpath))
+                        };
+                        
+                        if is_match {
+                            let relative_file_path = if rpath.is_empty() {
+                                rel_path_str
+                            } else {
+                                rel_path_str.trim_start_matches(rpath).trim_start_matches('/')
+                            };
+                            
+                            let local_file_path = std::path::PathBuf::from(&rule.local_path).join(relative_file_path);
+                            if local_file_path.exists() {
+                                log::info!("WebDAV [DELETE]: Removing mirrored local file to sync deletion: {:?}", local_file_path);
+                                let _ = tokio::fs::remove_file(local_file_path).await;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(ref aid) = manifest.account_id {
+                    let _ = self.orchestrator.push_manifest(aid, Arc::clone(&self.session_manager), Arc::clone(&self.cache)).await;
+                }
                 
                 Ok(())
             } else {
-                Err(FsError::Forbidden)
+                // Allow dot-files (.DS_Store, ._*) and missing files to succeed gracefully
+                Ok(())
             }
         }.boxed()
     }
+
+
     
     fn rename<'a>(&'a self, from: &'a DavPath, to: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
@@ -348,9 +464,16 @@ impl DavFileSystem for ClusterFs {
             
             let to_parent_entry = self.resolve_path(&to_parent_path).await?;
             let to_folder_id = match to_parent_entry {
+                VirtualEntry::Root => None,
                 VirtualEntry::AccountRoot(_) => None,
                 VirtualEntry::Folder(f) => Some(f.id),
                 _ => return Err(FsError::Forbidden),
+            };
+
+            let account_id = match from_entry {
+                VirtualEntry::File(ref m) => m.account_id.clone(),
+                VirtualEntry::Folder(ref f) => f.account_id.clone(),
+                _ => None,
             };
 
             match from_entry {
@@ -379,6 +502,10 @@ impl DavFileSystem for ClusterFs {
                     }
                 }
                 _ => return Err(FsError::Forbidden),
+            }
+
+            if let Some(ref aid) = account_id {
+                let _ = self.orchestrator.push_manifest(aid, Arc::clone(&self.session_manager), Arc::clone(&self.cache)).await;
             }
 
             Ok(())
@@ -526,6 +653,7 @@ pub struct UploadDavFile {
     pub cache: Arc<MetadataCache>,
     pub account_id: String,
     pub folder_id: Option<String>,
+    pub app_handle: Option<tauri::AppHandle>,
 }
 
 impl DavFile for UploadDavFile {
@@ -558,26 +686,37 @@ impl DavFile for UploadDavFile {
         let name = self.name.clone();
         let aid = self.account_id.clone();
         let fid = self.folder_id.clone();
+        let app_handle = self.app_handle.clone();
         
         async move {
             use tokio::io::AsyncWriteExt;
             self.file.flush().await.map_err(|_| FsError::GeneralFailure)?;
             
-            // Skip uploading metadata/system files
+            // Silently ignore OS metadata/system files without saving them to DB or pushing empty manifests
             if name.starts_with("._") || name == ".DS_Store" || name == "Thumbs.db" {
-                log::info!("WebDAV [FLUSH_SKIP]: Skipping upload to Telegram for system metadata file: {}", name);
+                log::info!("WebDAV [FLUSH_SKIP]: Ignoring OS metadata file: {}", name);
                 let _ = tokio::fs::remove_file(temp_path).await;
                 return Ok(());
             }
 
+
             // Wait for the actual upload to Telegram before telling the OS we are done
-            let manifest = orchestrator.upload_file(temp_path.clone(), session_manager, Arc::clone(&cache), name, None, fid, aid, None, None)
+            let emit_handle = app_handle.clone();
+            let manifest = orchestrator.upload_file(temp_path.clone(), session_manager.clone(), Arc::clone(&cache), name, app_handle, fid, aid.clone(), None, None)
                 .await.map_err(|_| FsError::GeneralFailure)?;
             
-            let _ = cache.save_file(manifest).await;
+            let _ = cache.save_file(manifest.clone()).await;
             let _ = tokio::fs::remove_file(temp_path).await;
+            
+            let _ = orchestrator.push_manifest(&aid, session_manager, Arc::clone(&cache)).await;
+            
+            // Notify frontend to refresh the file tree
+            if let Some(ref handle) = emit_handle {
+                let _ = handle.emit("files-changed", serde_json::json!({ "folder_id": manifest.folder_id }));
+            }
             
             Ok(())
         }.boxed()
     }
 }
+

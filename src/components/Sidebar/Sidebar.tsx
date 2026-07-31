@@ -20,11 +20,9 @@ export const Sidebar: React.FC = () => {
     nodeStatus,
     activeTask,
     taskProgress,
-    activeMirrors,
     queueTasks
   } = useAppStore();
 
-  const isMirrorSyncing = Object.values(activeMirrors).some(status => status === 'INDEXING' || status === 'SYNCING');
 
   const handleNavClick = (accountId: string, view: ViewCategory) => {
     setActiveAccount(accountId);
@@ -149,19 +147,6 @@ export const Sidebar: React.FC = () => {
            }`}></div>
         </div>
 
-        {isMirrorSyncing && (
-          <div className="flex items-center justify-between pt-1 border-t border-zinc-800/30">
-             <div className="flex flex-col">
-                <span className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em]">Mirroring</span>
-                <span className="text-[10px] font-black tracking-widest uppercase text-blue-400">
-                  Active
-                </span>
-             </div>
-             <div className="flex items-center justify-center w-5 h-5 rounded-md bg-blue-500/5 border border-blue-500/10 text-blue-500/60 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
-                <RefreshCw size={10} className="animate-spin" />
-             </div>
-          </div>
-        )}
 
         <AnimatePresence>
           {queueTasks.filter(t => t.status !== 'COMPLETED').length > 0 && (

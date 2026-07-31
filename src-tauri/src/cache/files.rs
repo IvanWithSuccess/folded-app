@@ -24,7 +24,7 @@ impl MetadataCache {
             }
         }
 
-        sqlx::query("INSERT INTO files (id, name, size, chunk_size, folder_id, account_id, storage_hub_id, storage_hub_access_hash, is_external, is_starred, created_at, is_current_version, version_of, version_number, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT OR REPLACE INTO files (id, name, size, chunk_size, folder_id, account_id, storage_hub_id, storage_hub_access_hash, is_external, is_starred, created_at, is_current_version, version_of, version_number, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&file.id)
             .bind(&file.name)
             .bind(file.total_size as i64)
@@ -338,29 +338,21 @@ impl MetadataCache {
         Ok(files)
     }
 
-    #[allow(dead_code)]
-    pub async fn get_cached_file(&self, file_id: &str) -> Option<String> {
-        let row = sqlx::query("SELECT path_on_disk FROM file_cache WHERE file_id = ?")
-            .bind(file_id).fetch_optional(&self.pool).await.ok().flatten()?;
-        let path: String = row.get("path_on_disk");
-        if std::path::Path::new(&path).exists() {
-            let now = chrono::Utc::now().timestamp();
-            let _ = sqlx::query("UPDATE file_cache SET last_accessed_at = ? WHERE file_id = ?")
-                .bind(now).bind(file_id).execute(&self.pool).await;
-            Some(path)
-        } else {
-            let _ = sqlx::query("DELETE FROM file_cache WHERE file_id = ?")
-                .bind(file_id).execute(&self.pool).await;
-            None
-        }
+    pub async fn get_cached_file(&self, _file_id: &str) -> Option<String> {
+        // Local file cache is disabled — virtual drive handles streaming directly from Telegram
+        None
     }
 
-    pub async fn record_cached_file(&self, file_id: &str, path: &str, size_bytes: u64) -> Result<()> {
-        let now = chrono::Utc::now().timestamp();
-        sqlx::query("INSERT OR REPLACE INTO file_cache (file_id, path_on_disk, size_bytes, last_accessed_at) VALUES (?, ?, ?, ?)")
-            .bind(file_id).bind(path).bind(size_bytes as i64).bind(now).execute(&self.pool).await?;
+    pub async fn record_cached_file(&self, _file_id: &str, path: &str, _size_bytes: u64) -> Result<()> {
+        // Cache disabled — just clean up the temp file if it exists
+        if std::path::Path::new(path).exists() {
+            let _ = std::fs::remove_file(path);
+        }
         Ok(())
     }
+
+
+
 
     pub async fn evict_cache_to_limit(&self, limit_bytes: u64) -> Result<Vec<String>> {
         let total: (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size_bytes), 0) FROM file_cache").fetch_one(&self.pool).await?;
@@ -386,4 +378,108 @@ impl MetadataCache {
         // Same as get_file_by_id but doesn't filter deleted_at
         self.get_file_by_id(file_id).await
     }
+
+    pub async fn create_snapshot_record(&self, record: SnapshotRecord) -> Result<()> {
+        sqlx::query("INSERT INTO snapshots (id, seq, device_name, file_count, timestamp, manifest_data) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(&record.id)
+            .bind(record.seq as i64)
+            .bind(&record.device_name)
+            .bind(record.file_count as i64)
+            .bind(record.timestamp)
+            .bind(&record.manifest_data)
+            .execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn get_snapshots(&self) -> Result<Vec<SnapshotRecord>> {
+        let rows = sqlx::query("SELECT id, seq, device_name, file_count, timestamp, manifest_data FROM snapshots ORDER BY seq DESC")
+            .fetch_all(&self.pool).await?;
+        
+        let mut list = Vec::new();
+        for r in rows {
+            let id: String = r.get("id");
+            let seq: i64 = r.get("seq");
+            let device_name: String = r.get("device_name");
+            let file_count: i64 = r.get("file_count");
+            let timestamp: i64 = r.get("timestamp");
+            let manifest_data: Option<String> = r.get("manifest_data");
+
+            list.push(SnapshotRecord {
+                id,
+                seq: seq as u64,
+                device_name,
+                file_count: file_count as usize,
+                timestamp,
+                manifest_data,
+            });
+        }
+        Ok(list)
+    }
+
+    pub async fn get_snapshot_by_id(&self, id: &str) -> Result<Option<SnapshotRecord>> {
+        let row = sqlx::query("SELECT id, seq, device_name, file_count, timestamp, manifest_data FROM snapshots WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool).await?;
+
+        if let Some(r) = row {
+            let id: String = r.get("id");
+            let seq: i64 = r.get("seq");
+            let device_name: String = r.get("device_name");
+            let file_count: i64 = r.get("file_count");
+            let timestamp: i64 = r.get("timestamp");
+            let manifest_data: Option<String> = r.get("manifest_data");
+
+            Ok(Some(SnapshotRecord {
+                id,
+                seq: seq as u64,
+                device_name,
+                file_count: file_count as usize,
+                timestamp,
+                manifest_data,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn delete_snapshot_record(&self, id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM snapshots WHERE id = ?").bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn get_next_snapshot_seq(&self) -> Result<u64> {
+        let row: (i64,) = sqlx::query_as("SELECT COALESCE(MAX(seq), 0) FROM snapshots").fetch_one(&self.pool).await?;
+        Ok((row.0 + 1) as u64)
+    }
+
+    /// Extract all chunk message_ids referenced across all saved snapshots.
+    pub async fn get_all_snapshot_message_ids(&self) -> Result<std::collections::HashSet<i32>> {
+
+        let rows: Vec<(String,)> = sqlx::query_as("SELECT manifest_data FROM snapshots WHERE manifest_data IS NOT NULL AND manifest_data != ''")
+            .fetch_all(&self.pool).await?;
+
+        let mut ids = std::collections::HashSet::new();
+        for (json_str,) in rows {
+            if let Ok(manifest) = serde_json::from_str::<crate::cluster::FoldedManifest>(&json_str) {
+                for file in manifest.files {
+                    for chunk in file.chunks {
+                        ids.insert(chunk.message_id as i32);
+                    }
+                }
+            }
+        }
+        Ok(ids)
+    }
 }
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SnapshotRecord {
+    pub id: String,
+    pub seq: u64,
+    pub device_name: String,
+    pub file_count: usize,
+    pub timestamp: i64,
+    pub manifest_data: Option<String>,
+}
+
+

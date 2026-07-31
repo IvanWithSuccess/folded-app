@@ -14,6 +14,18 @@ export interface ThemeDefinition {
 }
 
 export const THEMES: Record<string, ThemeDefinition> = {
+  apple_light: {
+    id: 'apple_light',
+    name: 'Apple Light',
+    colors: {
+      bg: '#f5f5f7',
+      surface: '#ffffff',
+      border: '#e5e5ea',
+      accent: '#007aff',
+      text: '#1d1d1f',
+      textMuted: '#86868b',
+    }
+  },
   deep_dark: {
     id: 'deep_dark',
     name: 'Deep Dark',
@@ -65,7 +77,7 @@ export const THEMES: Record<string, ThemeDefinition> = {
 };
 
 export const applyTheme = (themeId: string) => {
-  const theme = THEMES[themeId] || THEMES.deep_dark;
+  const theme = THEMES[themeId] || THEMES.apple_light;
   const root = document.documentElement;
   
   root.style.setProperty('--app-bg', theme.colors.bg);
