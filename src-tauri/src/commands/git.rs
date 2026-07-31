@@ -443,7 +443,7 @@ pub async fn get_repository_status(
             let root_path = root_path.to_path_buf();
             move |e| {
                 if let Ok(rel) = e.path().strip_prefix(&root_path) {
-                    let rel_path = rel.to_string_lossy().to_string();
+                    let rel_path = rel.to_string_lossy().replace('\\', "/");
                     if rel_path.is_empty() {
                         return true;
                     }
@@ -457,7 +457,7 @@ pub async fn get_repository_status(
     {
         if entry.file_type().is_file() {
             if let Ok(rel) = entry.path().strip_prefix(root_path) {
-                let rel_path = rel.to_string_lossy().to_string();
+                let rel_path = rel.to_string_lossy().replace('\\', "/");
                 if let Ok(hash) = compute_sha256(entry.path()) {
                     disk_files.insert(rel_path, hash);
                 }
@@ -471,7 +471,7 @@ pub async fn get_repository_status(
         if let Ok(Some(commit)) = cache.get_commit(head_id).await {
             if let Ok(manifest) = serde_json::from_str::<GitManifest>(&commit.manifest_data) {
                 for file in manifest.files {
-                    head_files.insert(file.relative_path, file.sha256);
+                    head_files.insert(file.relative_path.replace('\\', "/"), file.sha256);
                 }
             }
         }
@@ -525,8 +525,9 @@ pub async fn get_file_diff(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Repository not found".to_string())?;
 
+    let norm_file_path = file_path.replace('\\', "/");
     let root_path = Path::new(&repo.local_path);
-    let disk_file_path = root_path.join(&file_path);
+    let disk_file_path = root_path.join(&norm_file_path);
 
     // Read current content (from disk)
     let new_content = if disk_file_path.exists() {
@@ -540,7 +541,7 @@ pub async fn get_file_diff(
     if let Some(ref head_id) = repo.current_head {
         if let Ok(Some(commit)) = cache.get_commit(head_id).await {
             if let Ok(manifest) = serde_json::from_str::<GitManifest>(&commit.manifest_data) {
-                if let Some(file_entry) = manifest.files.iter().find(|f| f.relative_path == file_path) {
+                if let Some(file_entry) = manifest.files.iter().find(|f| f.relative_path.replace('\\', "/") == norm_file_path) {
                     old_hash = Some(file_entry.sha256.clone());
                 }
             }
@@ -580,15 +581,19 @@ pub async fn commit_changes(
         if let Ok(Some(commit)) = cache.get_commit(head_id).await {
             if let Ok(manifest) = serde_json::from_str::<GitManifest>(&commit.manifest_data) {
                 for file in manifest.files {
-                    manifest_files.insert(file.relative_path.clone(), file);
+                    let norm_path = file.relative_path.replace('\\', "/");
+                    let mut norm_file = file;
+                    norm_file.relative_path = norm_path.clone();
+                    manifest_files.insert(norm_path, norm_file);
                 }
             }
         }
     }
 
     // 2. Process committed files
-    for rel_path in &files_to_commit {
-        let disk_path = root_path.join(rel_path);
+    for raw_rel_path in &files_to_commit {
+        let rel_path = raw_rel_path.replace('\\', "/");
+        let disk_path = root_path.join(&rel_path);
         if disk_path.exists() {
             // Added or modified: copy to objects directory
             let size = std::fs::metadata(&disk_path).map(|m| m.len()).unwrap_or(0);
@@ -600,8 +605,6 @@ pub async fn commit_changes(
 
             // Reuse chunks if this exact file version was previously uploaded
             let mut chunks = Vec::new();
-            // Look up in our cache database if this SHA256 has been uploaded before
-            // We can query chunks where file_id matches or we can look up in commits
             let previous_pushed_commits = cache.get_commits(&repo_id).await.unwrap_or_default();
             'outer: for p_commit in previous_pushed_commits {
                 if let Ok(manifest) = serde_json::from_str::<GitManifest>(&p_commit.manifest_data) {
@@ -622,7 +625,7 @@ pub async fn commit_changes(
             });
         } else {
             // Deleted: remove from manifest
-            manifest_files.remove(rel_path);
+            manifest_files.remove(&rel_path);
         }
     }
 

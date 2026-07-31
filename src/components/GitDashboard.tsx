@@ -374,6 +374,35 @@ export const GitDashboard: React.FC = () => {
     }
   }, [activeRepo?.id]);
 
+  // Live auto-polling for disk changes (modifications, deletions, new files) & window focus refresh
+  useEffect(() => {
+    if (!activeRepo) return;
+
+    const pollInterval = setInterval(() => {
+      invoke<FileChange[]>('get_repository_status', { repoId: activeRepo.id })
+        .then(latestChanges => {
+          setChanges(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(latestChanges)) {
+              return latestChanges;
+            }
+            return prev;
+          });
+        })
+        .catch(() => {});
+    }, 2500);
+
+    const handleFocus = () => {
+      refreshRepoState();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [activeRepo?.id]);
+
+
 
   // Sync settings inputs when activeRepo changes
   const [activeMergeState, setActiveMergeState] = useState<any | null>(null);
