@@ -1,72 +1,80 @@
-# 📂 Folded Cloud
+# 📂 Folded Git
 
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC107?logo=tauri&logoColor=white)](https://tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![License](https://img.shields.io/badge/License-PolyForm_Shield-orange.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-macOS-blue?logo=apple&logoColor=white)](#)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue?logo=apple&logoColor=white)](#)
 
-**Folded Cloud** is a high-performance native macOS application that turns your Telegram accounts into a unified, distributed cluster of unlimited cloud storage with deep operating system integration.
+**Folded Git** is a high-performance cross-platform desktop application (macOS & Windows) that turns your Telegram accounts into a secure, distributed version control system and unlimited cloud storage.
 
-The app allows you to mount your storage as a virtual network drive, providing instant read/write access to files and media streams directly through the native macOS Finder, without requiring you to pre-download files to your local machine.
+The app allows you to track code changes with Git-style commits and branching, create system snapshots, stream media on demand, and mount your cloud storage as a native virtual network drive via an embedded WebDAV bridge.
 
 ---
 
 ## ⚙️ How It Works
 
-The system is built on the principles of local metadata indexing and on-demand data streaming:
+**Folded Git** combines Git version control primitives with MTProto Telegram cloud chunking:
 
-### 1. Intelligent Chunking
-When uploading a file to the cloud, the app automatically splits it into optimized segments (up to 1.9 GB for regular accounts, and up to 3.9 GB for Telegram Premium). This bypasses Telegram's message size limit and ensures robust transfer of files of any size.
+### 1. Git-Style Version Control
+* **Commits & History**: Create version snapshots of your code and project folders. View file diffs with side-by-side added (`+`) and deleted (`-`) line highlights.
+* **Branching & Merging**: Create feature branches, switch HEAD commits, and resolve merge conflicts interactively inside the app.
+* **Push & Pull**: Synchronize local commits with Telegram Cloud ("Saved Messages").
 
-### 2. Local Meta-Index (SQLite)
-Your entire directory structure, folders, and links between files and Telegram messages are cached locally in a SQLite database. Finding, sorting, and browsing your files is instantaneous since it requires no constant requests to the Telegram API.
+### 2. Intelligent Chunking & MTProto Transport
+When pushing files or committing snapshots, Folded Git automatically splits large files into optimized chunks (up to 1.9 GB for regular accounts, and up to 3.9 GB for Telegram Premium). Data is transferred directly to Telegram servers using native MTProto clients.
 
-### 3. Virtual Drive & Streaming (WebDAV Bridge)
-An embedded WebDAV server emulates a network file system. When you play a video or open a document in Finder:
-* The OS sends standard HTTP Range requests to the local bridge.
-* The bridge maps the requested byte offsets to specific Telegram messages and chunks.
-* The MTProto client requests the precise range directly from Telegram servers.
-* Data streams on-the-fly, allowing you to play 4K video or skip around media instantly without downloading the whole file.
+### 3. Local Meta-Index (SQLite)
+Repository states, commit histories, trees, and file hashes are indexed locally in a SQLite database (`metadata_db.sqlite`). Finding files, inspecting history, and computing diffs is instantaneous without making blocking network calls.
+
+### 4. Virtual Network Drive & Streaming (WebDAV Bridge)
+An embedded WebDAV server emulates a network drive (`Finder` on macOS, `File Explorer` on Windows):
+* The OS sends standard HTTP Range requests to the local WebDAV bridge (`127.0.0.1:9876`).
+* The bridge maps byte offsets to specific Telegram chunks.
+* Data streams on the fly, allowing you to play 4K video or open large documents without pre-downloading entire files to disk.
 
 ---
 
 ## 🌟 Key Features
 
-* **🚀 Multi-account Cluster**: Merge multiple Telegram accounts into a single storage array. Each account acts as an independent storage node.
-* **📤 WebDAV R/W Integration**: Mount the cloud as a local network drive with full read and write capabilities, allowing you to drag-and-drop files directly in Finder to upload them.
-* **📡 On-Demand Streaming**: Play media, open documents, and view images without downloading them to your local disk first.
-* **🔄 Autonomous Background Crawler**: A background worker scans your selected chats and "Saved Messages" to index newly found files automatically.
-* **📝 Cloud Notes**: Text editor with file attachment support, storing notes directly on Telegram.
-* **🖥️ System Tray Integration**: Runs as a background daemon, keeping the WebDAV bridge active even when the main app window is closed.
+* **🔀 Full Git Version Control**: Commits, branch management, visual line diff viewer, checkout, rollbacks, and interactive conflict resolution.
+* **🚀 Multi-Account Cluster**: Merge multiple Telegram accounts into a single storage cluster where each account acts as a node.
+* **📤 Native WebDAV Mount**: Mount your storage as a local drive (`Finder` / `Explorer`) with direct drag-and-drop file transfers.
+* **📡 On-Demand Media Streaming**: Play videos, preview audio, and open documents directly from Telegram Cloud.
+* **📸 Snapshot Manager**: Create manual or scheduled system-wide snapshots (Hourly, Daily, Weekly, Monthly) with automated sequence tracking.
+* **📋 Task Queue & Transfers**: Real-time progress monitoring for active file uploads, downloads, and background sync operations.
+* **🖥️ System Tray & Background Daemon**: Runs silently in the system tray, keeping WebDAV mounts active when the main window is closed.
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Rust (Backend / Core Engine)
-* **Tauri v2**: Lightweight and secure Electron alternative for the user interface and native OS integration.
-* **Grammers**: High-performance asynchronous MTProto client for low-level interaction with Telegram servers.
-* **SQLx + SQLite**: Secure and reliable local metadata storage with support for transactions and database migrations.
-* **Axum**: Lightweight web framework implementing the local WebDAV server.
+### Rust Engine (`src-tauri`)
+* **Tauri v2**: Desktop framework for native OS integration and cross-platform window management.
+* **Grammers**: Asynchronous MTProto client for direct communication with Telegram servers.
+* **SQLx + SQLite**: High-performance local metadata index for commits, files, and settings.
+* **Axum + dav-server**: WebDAV bridge implementation handling HTTP range requests and local drive emulation.
 
-### TypeScript / React (Frontend)
-* **React 18** + **Vite**: Ultra-fast UI build and reactive component updates.
-* **Tailwind CSS 4**: Modern styling system utilizing design tokens and CSS variables.
-* **Zustand**: Simple, lightweight state management.
-* **Lucide React**: Clean and modern developer-friendly icons.
+### Frontend (`src`)
+* **React 18** + **TypeScript** + **Vite**: Reactive UI engine.
+* **Tailwind CSS 4**: Modern styling with CSS variables and dark/light design system.
+* **Lucide React**: Clean developer-friendly iconography.
+* **Zustand**: Lightweight state management.
 
 ---
 
-## 🚀 Installation & Setup
+## 🚀 Installation & Building
 
-### System Requirements
-* **Rust**: `rustc` and `cargo` version 1.75 or higher.
+### Pre-built Releases
+Download ready-to-run installers for **macOS** (`.dmg`, `.app`) and **Windows** (`.exe`, `.msi`) directly from the [GitHub Releases](https://github.com/IvanWithSuccess/folded-app/releases) page.
+
+### Building from Source
+
+#### Prerequisites
+* **Rust**: `rustc` and `cargo` 1.75 or higher.
 * **Node.js**: Version 18.0 or higher.
-* **OS**: macOS 12+ (tested on both Apple Silicon and Intel).
 
-### Step-by-Step Guide
-
+#### Steps
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/IvanWithSuccess/folded-app.git
@@ -83,28 +91,15 @@ An embedded WebDAV server emulates a network file system. When you play a video 
    npx tauri dev
    ```
 
-4. **Build the production release**:
+4. **Build production binary**:
    ```bash
-   npx tauri build
+   npm run build && npx tauri build
    ```
-   *The built `.dmg` or `.app` bundle will be located in the `src-tauri/target/release/bundle/` directory.*
 
 ---
 
 ## 🔒 Security & Privacy
 
-Privacy was a core design priority:
-* **No Middlemen**: All API requests and file chunks go directly between your device and Telegram's servers. No third-party trackers or telemetry.
-* **Local Session Storage**: Auth sessions (`~/.folded/sessions/`) and your SQLite index database (`~/.folded/metadata_db.sqlite`) are stored entirely on your local machine, secured by OS file permissions.
-* **Session Encryption**: Authentication credentials and MTProto keys are fully protected by Telegram's native cryptographic protocols.
-
----
-
-## 📄 License
-
-This project is licensed under the PolyForm Shield License 1.0.0. 
-
-Under this license, you are free to use, copy, modify, and distribute the software for any purpose **except** for creating a product or service that competes with Folded Cloud or any other product/service provided by the copyright holder (**IvanSuccess**).
-
-For the full terms, please see the [LICENSE](file:///Users/ivan/.gemini/antigravity/scratch/folded-app/LICENSE) file.
-
+* **Direct MTProto Connection**: Data transfers occur directly between your device and Telegram's official servers. No third-party relays or tracking servers.
+* **Local Session Storage**: Authentication keys (`~/.folded/sessions/`) and SQLite indexes (`~/.folded/metadata_db.sqlite`) reside entirely on your machine.
+* **Safe OS Unmounting**: Automatic ejection of stale network mounts on startup and shutdown to prevent system volume conflicts.

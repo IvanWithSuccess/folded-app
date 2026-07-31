@@ -1,7 +1,7 @@
 {
-  "productName": "Folded",
+  "productName": "Folded Git",
   "version": "1.0.1",
-  "identifier": "com.folded.cloud",
+  "identifier": "com.folded.git",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
