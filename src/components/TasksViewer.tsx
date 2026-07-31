@@ -77,14 +77,22 @@ export const TasksViewer: React.FC = () => {
       }
     }).then(fn => { unlistenProgress = fn; }).catch(console.error);
 
-    const interval = setInterval(fetchActiveTasks, 2500);
+    let unlistenFiles: (() => void) | null = null;
+
+    listen('files-changed', () => {
+      fetchActiveTasks();
+    }).then(fn => { unlistenFiles = fn; }).catch(console.error);
+
+    const interval = setInterval(fetchActiveTasks, 5000);
 
     return () => {
       clearInterval(interval);
       if (unlistenTask) { try { unlistenTask(); } catch (e) {} }
       if (unlistenProgress) { try { unlistenProgress(); } catch (e) {} }
+      if (unlistenFiles) { try { unlistenFiles(); } catch (e) {} }
     };
   }, []);
+
 
   const parseTaskFileName = (task: PersistentTask) => {
     try {

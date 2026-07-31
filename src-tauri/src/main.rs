@@ -295,6 +295,16 @@ fn main() {
                 .icon(tray_icon)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "quit" => {
@@ -302,6 +312,7 @@ fn main() {
                         }
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
@@ -327,6 +338,26 @@ fn main() {
                     Err(e) => log::error!("Critical failure during session restoration: {}", e),
                 }
             });
+
+            // E2E test execution check
+            let args: Vec<String> = std::env::args().collect();
+            if args.contains(&"--run-tests".to_string()) {
+                let app_handle_clone = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    println!("Launching Folded E2E Integration Test Suite...");
+                    match crate::commands::git::run_git_e2e_tests(app_handle_clone).await {
+                        Ok(_) => {
+                            println!("E2E TESTS PASSED!");
+                            std::process::exit(0);
+                        }
+                        Err(e) => {
+                            eprintln!("E2E TESTS FAILED: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                });
+            }
 
             // Start WebDAV server and perform auto-mounting if enabled
             let webdav_clone = Arc::clone(&webdav_bridge);
@@ -356,6 +387,17 @@ fn main() {
             Ok(())
         })
         .invoke_handler(crate::generate_handler!())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::Reopen { .. } => {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            _ => {}
+        });
 }
+

@@ -8,7 +8,9 @@ import { LoginModal } from './components/LoginModal';
 import { SyncSplashScreen } from './components/SyncSplashScreen';
 import { OnboardingStorage } from './components/OnboardingStorage';
 import { GitDashboard } from './components/GitDashboard';
+import { GlobalErrorBanner } from './components/GlobalErrorBanner';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
 
 
 
@@ -234,10 +236,13 @@ function App() {
   // --- Main Ready State ---
   return (
     <ErrorBoundary name="GIT_DASHBOARD">
+      <GlobalErrorBanner />
       <GitDashboard />
     </ErrorBoundary>
   );
 }
+
+
 
 
 // Simple internal wrapper for transitions if needed

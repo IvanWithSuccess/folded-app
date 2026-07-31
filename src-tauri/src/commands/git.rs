@@ -2431,3 +2431,220 @@ pub async fn abort_merge(
 
     Ok(())
 }
+
+pub async fn run_git_e2e_tests(app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    let home = std::env::var("HOME").expect("No HOME env var");
+    let app_dir = PathBuf::from(&home).join(".folded");
+    let sessions_dir = app_dir.join("sessions");
+
+    let cache = app_handle.state::<Arc<MetadataCache>>();
+    let session = app_handle.state::<Arc<SessionManager>>();
+    let cluster = app_handle.state::<Arc<ClusterOrchestrator>>();
+
+    let accounts = session.get_active_accounts().await;
+    println!("Loaded {} active accounts", accounts.len());
+    if accounts.is_empty() {
+        return Err("No active Telegram accounts found for testing. Skipping E2E test.".to_string());
+    }
+
+    let account_id = &accounts[0].id;
+    println!("Using account ID: {}", account_id);
+
+    // Create local test directory
+    let local_path = PathBuf::from(&home).join(".folded").join("tmp").join("folded_test_repo");
+    let _ = std::fs::remove_dir_all(&local_path);
+    std::fs::create_dir_all(&local_path).expect("Failed to create local test repo dir");
+
+    let readme_file = local_path.join("README.md");
+    std::fs::write(&readme_file, "# Integration Test README\nLine 1\n").expect("Failed to write README");
+
+    let code_file = local_path.join("main.js");
+    std::fs::write(&code_file, "console.log('main');\n").expect("Failed to write main.js");
+
+    let repo_id = "folded_e2e_integration_test_repo".to_string();
+
+    // Clean up previous test run repository in case of panics
+    let _ = delete_repository(cache.clone(), repo_id.clone()).await;
+    let _ = delete_remote_repository(cache.clone(), session.clone(), repo_id.clone()).await;
+
+    // 1. Create Repository
+    println!("Test Step 1: Create repository");
+    create_repository(
+        cache.clone(),
+        session.clone(),
+        repo_id.clone(),
+        local_path.to_string_lossy().to_string(),
+        account_id.clone(),
+    ).await.expect("create_repository failed");
+
+    // 2. Scan Status (Verify 2 files are untracked/added)
+    println!("Test Step 2: Get initial status");
+    let changes = get_repository_status(
+        cache.clone(),
+        repo_id.clone(),
+    ).await.expect("get_repository_status failed");
+    assert_eq!(changes.len(), 2);
+    assert!(changes.iter().any(|c| c.relative_path == "README.md" && c.status == "added"));
+    assert!(changes.iter().any(|c| c.relative_path == "main.js" && c.status == "added"));
+
+    // 3. Commit changes (Initial commit)
+    println!("Test Step 3: Commit initial files");
+    let commit_msg = "Initial commit".to_string();
+    let commit_desc = Some("Adding README.md and main.js".to_string());
+    commit_changes(
+        cache.clone(),
+        repo_id.clone(),
+        commit_msg,
+        commit_desc,
+        "Integration Test Author".to_string(),
+        vec!["README.md".to_string(), "main.js".to_string()],
+    ).await.expect("commit_changes failed");
+
+    // 4. Push to Telegram
+    println!("Test Step 4: Push initial commit to Telegram");
+    push_commits(
+        app_handle.clone(),
+        cache.clone(),
+        session.clone(),
+        cluster.clone(),
+        repo_id.clone(),
+    ).await.expect("push_commits failed");
+
+    // 5. Create a new branch 'branch-a'
+    println!("Test Step 5: Create branch-a");
+    create_branch(
+        cache.clone(),
+        repo_id.clone(),
+        "branch-a".to_string(),
+        None,
+    ).await.expect("create_branch failed");
+
+    // 6. Switch to 'branch-a'
+    println!("Test Step 6: Switch to branch-a");
+    switch_branch(
+        app_handle.clone(),
+        cache.clone(),
+        session.clone(),
+        cluster.clone(),
+        repo_id.clone(),
+        "branch-a".to_string(),
+    ).await.expect("switch_branch to branch-a failed");
+
+    // Modify main.js on branch-a and commit
+    println!("Test Step 6b: Edit main.js on branch-a and commit");
+    std::fs::write(&code_file, "console.log('main branch A');\n").expect("Failed to edit main.js");
+    commit_changes(
+        cache.clone(),
+        repo_id.clone(),
+        "Update main.js on branch-a".to_string(),
+        None,
+        "Integration Test Author".to_string(),
+        vec!["main.js".to_string()],
+    ).await.expect("commit on branch-a failed");
+
+    // 7. Switch back to 'main'
+    println!("Test Step 7: Switch back to main");
+    switch_branch(
+        app_handle.clone(),
+        cache.clone(),
+        session.clone(),
+        cluster.clone(),
+        repo_id.clone(),
+        "main".to_string(),
+    ).await.expect("switch_branch to main failed");
+
+    // Verify main.js was reverted to the original version
+    let content = std::fs::read_to_string(&code_file).expect("Failed to read README");
+    assert_eq!(content, "console.log('main');\n");
+
+    // Modify main.js on main and commit
+    println!("Test Step 7b: Edit main.js on main and commit");
+    std::fs::write(&code_file, "console.log('main branch B');\n").expect("Failed to edit main.js");
+    commit_changes(
+        cache.clone(),
+        repo_id.clone(),
+        "Update main.js on main".to_string(),
+        None,
+        "Integration Test Author".to_string(),
+        vec!["main.js".to_string()],
+    ).await.expect("commit on main failed");
+
+    // 8. Merge branch-a into main (should cause a conflict!)
+    println!("Test Step 8: Merge branch-a into main (conflict expected)");
+    let merge_res = merge_branch(
+        app_handle.clone(),
+        cache.clone(),
+        session.clone(),
+        cluster.clone(),
+        repo_id.clone(),
+        "branch-a".to_string(),
+        "main".to_string(),
+    ).await;
+    assert_eq!(merge_res, Err("MERGE_CONFLICTS".to_string()));
+
+    // Verify merge state JSON exists
+    let merge_state_file = local_path.join(".folded_merge_state.json");
+    assert!(merge_state_file.exists());
+
+    // 9. Resolve conflict by choosing 'current' (keeps main branch B version)
+    println!("Test Step 9: Resolve conflict on main.js");
+    resolve_conflict(
+        app_handle.clone(),
+        cache.clone(),
+        repo_id.clone(),
+        "main.js".to_string(),
+        "current".to_string(),
+    ).await.expect("resolve_conflict failed");
+
+    // Verify conflict file is gone and content matches main branch B version
+    assert!(!merge_state_file.exists());
+    let final_content = std::fs::read_to_string(&code_file).expect("Failed to read main.js");
+    assert_eq!(final_content, "console.log('main branch B');\n");
+
+    // 10. Delete Local Repository Mapping and File Directory
+    println!("Test Step 10: Delete local repository mapping");
+    delete_repository(
+        cache.clone(),
+        repo_id.clone(),
+    ).await.expect("delete_repository failed");
+
+    // Wipe local directory completely
+    let _ = std::fs::remove_dir_all(&local_path);
+
+    // 11. Clone Repository from Telegram to a new path
+    println!("Test Step 11: Clone repository from Telegram");
+    let clone_path = PathBuf::from(&home).join(".folded").join("tmp").join("folded_test_repo_cloned");
+    let _ = std::fs::remove_dir_all(&clone_path);
+
+    clone_repository(
+        app_handle.clone(),
+        cache.clone(),
+        session.clone(),
+        cluster.clone(),
+        clone_path.to_string_lossy().to_string(),
+        account_id.clone(),
+        repo_id.clone(),
+    ).await.expect("clone_repository failed");
+
+    // Verify cloned README.md history and content
+    let cloned_readme = clone_path.join(&repo_id).join("README.md");
+    assert!(cloned_readme.exists());
+
+    // 12. Wipe remote repository from Telegram to keep it clean
+    println!("Test Step 12: Wipe remote repository from Telegram");
+    delete_remote_repository(
+        cache.clone(),
+        session.clone(),
+        repo_id.clone(),
+    ).await.expect("delete_remote_repository failed");
+
+    // Wipe final local directories
+    let _ = std::fs::remove_dir_all(&clone_path);
+
+    println!("Folded E2E integration test completed successfully!");
+    Ok(())
+}

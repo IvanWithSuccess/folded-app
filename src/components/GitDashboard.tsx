@@ -354,19 +354,26 @@ export const GitDashboard: React.FC = () => {
     loadRepositories();
   }, []);
 
+  const [isRepoLoading, setIsRepoLoading] = useState<boolean>(false);
+
   // Sync details when active repository changes
   useEffect(() => {
     setSelectedChangeFile(null);
     setSelectedCommit(null);
     setSelectedCommitFile(null);
     setFileDiff([]);
+    setChanges([]);
+    setHistory([]);
     if (activeRepo) {
-      refreshRepoState();
+      setIsRepoLoading(true);
+      refreshRepoState().finally(() => setIsRepoLoading(false));
     } else {
       setChanges([]);
       setHistory([]);
+      setIsRepoLoading(false);
     }
-  }, [activeRepo]);
+  }, [activeRepo?.id]);
+
 
   // Sync settings inputs when activeRepo changes
   const [activeMergeState, setActiveMergeState] = useState<any | null>(null);
@@ -500,13 +507,12 @@ export const GitDashboard: React.FC = () => {
       }
       
       // Fetch history for active branch
-      if (updated) {
-        const historyList = await invoke<GitCommitInfo[]>('get_branch_history', { 
-          repoId: activeRepo.id,
-          branchName: updated.current_branch 
-        });
-        setHistory(historyList);
-      }
+      const branchToLoad = updated ? updated.current_branch : currentBranch;
+      const historyList = await invoke<GitCommitInfo[]>('get_branch_history', { 
+        repoId: activeRepo.id,
+        branchName: branchToLoad 
+      });
+      setHistory(historyList);
 
       try {
         const mergeState = await invoke<any>('read_merge_state', { repoId: activeRepo.id });
@@ -518,6 +524,7 @@ export const GitDashboard: React.FC = () => {
       console.error('Failed to refresh repo:', e);
     }
   };
+
 
   const fetchDiff = async (relPath: string) => {
     if (!activeRepo) return;
@@ -1024,12 +1031,17 @@ export const GitDashboard: React.FC = () => {
     }
   };
 
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
+
   const handleCommit = async () => {
     if (!activeRepo || !commitSummary || selectedFiles.size === 0) return;
     if (repoAccountStatus[activeRepo.id] === false) {
       alert('Cannot commit: linked Telegram account is disconnected.');
       return;
     }
+    setIsCommitting(true);
     setLoading(true);
     try {
       // Get currently signed in user or default to "Me"
@@ -1051,6 +1063,7 @@ export const GitDashboard: React.FC = () => {
     } catch (e) {
       alert('Commit failed: ' + e);
     } finally {
+      setIsCommitting(false);
       setLoading(false);
     }
   };
@@ -1061,14 +1074,16 @@ export const GitDashboard: React.FC = () => {
       alert('Cannot push: linked Telegram account is disconnected.');
       return;
     }
+    setIsPushing(true);
     setLoading(true);
-    setSyncStatus('Uploading commits to Telegram...');
+    setSyncStatus('Uploading commits to Telegram Cloud...');
     try {
       await invoke('push_commits', { repoId: activeRepo.id });
       await refreshRepoState();
     } catch (e) {
       alert('Push failed: ' + e);
     } finally {
+      setIsPushing(false);
       setLoading(false);
       setSyncStatus(null);
     }
@@ -1080,8 +1095,9 @@ export const GitDashboard: React.FC = () => {
       alert('Cannot pull: linked Telegram account is disconnected.');
       return;
     }
+    setIsPulling(true);
     setLoading(true);
-    setSyncStatus('Downloading commits from Telegram...');
+    setSyncStatus('Downloading commits from Telegram Cloud...');
     try {
       await invoke('pull_commits', { repoId: activeRepo.id });
       setCommitsBehind(0);
@@ -1089,10 +1105,12 @@ export const GitDashboard: React.FC = () => {
     } catch (e) {
       alert('Pull failed: ' + e);
     } finally {
+      setIsPulling(false);
       setLoading(false);
       setSyncStatus(null);
     }
   };
+
 
   const handleFetch = async () => {
     // For our simplified model, Fetch is same as Pull, it scans and downloads/indexes remote commits
@@ -1234,8 +1252,8 @@ export const GitDashboard: React.FC = () => {
               disabled={loading || repoAccountStatus[activeRepo.id] === false}
               className="px-3 py-1.5 bg-[var(--app-bg)] hover:bg-[var(--app-surface)] text-[12px] font-medium text-[var(--app-text)] rounded-lg flex items-center gap-1.5 cursor-pointer border border-[var(--app-border)] transition-all active:scale-[0.98] disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading && syncStatus?.includes('Down') ? 'animate-spin' : ''}`} />
-              Fetch origin
+              <RefreshCw className={`w-3.5 h-3.5 ${(loading && isPulling) ? 'animate-spin text-blue-500' : ''}`} />
+              Fetch Cloud
             </button>
 
             {unpushedCount > 0 ? (
@@ -1244,8 +1262,8 @@ export const GitDashboard: React.FC = () => {
                 disabled={loading || repoAccountStatus[activeRepo.id] === false}
                 className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-[12px] font-semibold text-white rounded-lg flex items-center gap-1.5 cursor-pointer border-0 shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                <ArrowUp className="w-3.5 h-3.5" />
-                Push {unpushedCount} commits
+                {isPushing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUp className="w-3.5 h-3.5" />}
+                {isPushing ? 'Pushing...' : `Push ${unpushedCount} commits`}
               </button>
             ) : commitsBehind > 0 ? (
               <button
@@ -1253,18 +1271,19 @@ export const GitDashboard: React.FC = () => {
                 disabled={loading || repoAccountStatus[activeRepo.id] === false}
                 className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-[12px] font-semibold text-white rounded-lg flex items-center gap-1.5 cursor-pointer border-0 shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                <ArrowDown className="w-3.5 h-3.5" />
-                Pull {commitsBehind} commits
+                {isPulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                {isPulling ? 'Pulling...' : `Pull ${commitsBehind} commits`}
               </button>
             ) : (
               <button
                 disabled
                 className="px-3.5 py-1.5 bg-[var(--app-bg)] text-[12px] font-semibold text-[var(--app-text-muted)] rounded-lg flex items-center gap-1.5 border border-[var(--app-border)]"
               >
-                <Check className="w-3.5 h-3.5" />
-                Synced with Telegram
+                <Check className="w-3.5 h-3.5 text-[#34c759]" />
+                Synced with Telegram Cloud
               </button>
             )}
+
           </div>
         )}
       </header>
@@ -1354,7 +1373,12 @@ export const GitDashboard: React.FC = () => {
 
             {/* Content Lists */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-              {activeTab === 'CHANGES' ? (
+              {isRepoLoading ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--app-text-muted)] gap-2.5">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                  <span className="text-[12px] font-medium text-[var(--app-text)]">Loading repository data...</span>
+                </div>
+              ) : activeTab === 'CHANGES' ? (
                 /* Changes View */
                 changes.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-4 text-[var(--app-text-muted)]">
@@ -1491,7 +1515,7 @@ export const GitDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Commit Input Box at Footer of Changes tab */}
+            {/* Commit Form Panel (Only in CHANGES tab) */}
             {activeTab === 'CHANGES' && changes.length > 0 && (
               <div className="p-3 border-t border-[var(--app-border)] bg-[var(--app-surface)] space-y-2.5 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1521,11 +1545,17 @@ export const GitDashboard: React.FC = () => {
 
                 <button
                   onClick={handleCommit}
-                  disabled={!commitSummary || selectedFiles.size === 0 || loading}
+                  disabled={!commitSummary || selectedFiles.size === 0 || loading || isCommitting}
                   className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[var(--app-bg)] text-white disabled:text-[var(--app-text-muted)] text-[12px] font-semibold rounded-lg border-0 cursor-pointer transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-md"
                 >
-                  <Check className="w-4 h-4" /> Commit to main
+                  {isCommitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  {isCommitting ? 'Committing...' : `Commit to ${currentBranch}`}
                 </button>
+
               </div>
             )}
           </div>
@@ -1580,32 +1610,40 @@ export const GitDashboard: React.FC = () => {
                   <div className="h-10 bg-[var(--app-surface)] border-b border-[var(--app-border)] px-4 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-blue-400" />
-                      <span className="text-[12.5px] font-mono text-[var(--app-text)] font-semibold">{selectedChangeFile}</span>
+                      <span className="font-mono text-[12px] font-bold text-[var(--app-text)]">{selectedChangeFile}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fetchDiff(selectedChangeFile)}
+                        disabled={loading}
+                        className="px-2.5 py-1 bg-[var(--app-bg)] hover:bg-[var(--app-surface)] text-[11px] text-[var(--app-text-muted)] font-semibold rounded-md border border-[var(--app-border)] cursor-pointer flex items-center gap-1 transition-all"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh Diff
+                      </button>
                     </div>
                   </div>
 
                   {activeMergeState?.conflicts?.some((c: any) => c.relative_path === selectedChangeFile) && (
-                    <div className="bg-yellow-500/10 border-b border-yellow-500/20 p-3.5 flex flex-col gap-2 shrink-0 select-none animate-in fade-in duration-200">
-                      <div className="flex items-center gap-1.5 text-yellow-700 dark:text-yellow-600 text-[12px] font-bold">
-                        <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                        <span>Merge Conflict in File</span>
+                    <div className="bg-yellow-500/10 border-b border-yellow-500/25 px-4 py-2 flex items-center justify-between text-[11.5px] text-yellow-600 font-semibold shrink-0">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0" />
+                        <span>Merge Conflict in this file. Choose which version to resolve with:</span>
                       </div>
-                      <p className="text-[11px] text-[var(--app-text-muted)] leading-relaxed font-medium">
-                        This file has conflicting modifications from both branches. Choose which version to keep:
-                      </p>
-                      <div className="flex gap-2.5">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleResolveConflict(selectedChangeFile, 'current')}
-                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border-0 cursor-pointer text-[11px] font-bold shadow-sm transition-all active:scale-[0.98]"
+                          className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold cursor-pointer transition-all text-[11px] border-0"
                         >
-                          Keep Current (HEAD)
+                          Keep Ours ({currentBranch})
                         </button>
                         <button
                           onClick={() => handleResolveConflict(selectedChangeFile, 'incoming')}
-                          className="px-3.5 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg border-0 cursor-pointer text-[11px] font-bold shadow-sm transition-all active:scale-[0.98]"
+                          className="px-2.5 py-1 bg-yellow-600 hover:bg-yellow-500 text-white rounded font-bold cursor-pointer transition-all text-[11px] border-0"
                         >
                           Keep Incoming ({activeMergeState.source_branch})
                         </button>
+
                       </div>
                     </div>
                   )}
@@ -1615,34 +1653,36 @@ export const GitDashboard: React.FC = () => {
                     {fileDiff.length === 0 ? (
                       <span className="text-[var(--app-text-muted)] block italic">Empty file or no changes computed.</span>
                     ) : (
-                      fileDiff.map((line, idx) => (
-                        <div 
-                          key={idx}
-                          className={`flex whitespace-pre px-2.5 py-0.5 rounded-sm ${
-                            line.line_type === 'added'
-                              ? 'bg-green-500/10 text-green-500 border-l-[3px] border-green-500'
-                              : line.line_type === 'deleted'
-                              ? 'bg-red-500/10 text-red-500 border-l-[3px] border-red-500'
-                              : 'text-[var(--app-text-muted)] border-l-[3px] border-transparent'
-                          }`}
-                        >
-                          {/* Line Numbers */}
-                          <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
-                            {line.line_type === 'added' ? '' : line.old_line_num}
-                          </span>
-                          <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
-                            {line.line_type === 'deleted' ? '' : line.new_line_num}
-                          </span>
-                          
-                          {/* Prefix sign */}
-                          <span className="w-4 select-none shrink-0 font-bold">
-                            {line.line_type === 'added' ? '+' : line.line_type === 'deleted' ? '-' : ' '}
-                          </span>
-                          
-                          {/* Code Content */}
-                          <span>{line.content}</span>
-                        </div>
-                      ))
+                      <div className="min-w-full w-max flex flex-col">
+                        {fileDiff.map((line, idx) => (
+                          <div 
+                            key={idx}
+                            className={`flex w-full whitespace-pre px-2.5 py-0.5 rounded-sm ${
+                              line.line_type === 'added'
+                                ? 'bg-green-500/10 text-green-500 border-l-[3px] border-green-500'
+                                : line.line_type === 'deleted'
+                                ? 'bg-red-500/10 text-red-500 border-l-[3px] border-red-500'
+                                : 'text-[var(--app-text-muted)] border-l-[3px] border-transparent'
+                            }`}
+                          >
+                            {/* Line Numbers */}
+                            <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
+                              {line.line_type === 'added' ? '' : line.old_line_num}
+                            </span>
+                            <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
+                              {line.line_type === 'deleted' ? '' : line.new_line_num}
+                            </span>
+                            
+                            {/* Prefix sign */}
+                            <span className="w-4 select-none shrink-0 font-bold">
+                              {line.line_type === 'added' ? '+' : line.line_type === 'deleted' ? '-' : ' '}
+                            </span>
+                            
+                            {/* Code Content */}
+                            <span>{line.content}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1652,14 +1692,19 @@ export const GitDashboard: React.FC = () => {
                     <FileText className="w-7 h-7 text-[var(--app-text-muted)]" />
                   </div>
                   <div>
-                    <h3 className="text-[13px] font-semibold text-[var(--app-text)]">No file selected</h3>
-                    <p className="text-[11px] mt-1">Select an item on the changes checklist to view its diff.</p>
+                    <h3 className="text-[14px] font-bold text-[var(--app-text)]">No File Selected</h3>
+                    <p className="text-[11px] text-[var(--app-text-muted)] mt-1">Select a changed file from the left sidebar to view code diffs.</p>
                   </div>
                 </div>
               )
             ) : (
               /* HISTORY TAB RIGHT PANE */
-              selectedCommit ? (
+              isRepoLoading ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--app-text-muted)] gap-3">
+                  <Loader2 className="animate-spin text-blue-500" size={24} />
+                  <span className="text-[13px] font-semibold text-[var(--app-text)]">Loading repository history...</span>
+                </div>
+              ) : selectedCommit ? (
                 <div className="h-full flex flex-row overflow-hidden">
                   
                   {/* Commit metadata & files list */}
@@ -1780,18 +1825,11 @@ export const GitDashboard: React.FC = () => {
                   <div className="flex-1 bg-[var(--app-bg)] flex flex-col overflow-hidden">
                     {selectedCommitFile ? (
                       <div className="h-full flex flex-col overflow-hidden">
-                        <div className="h-10 bg-[var(--app-surface)] border-b border-[var(--app-border)] px-4 flex items-center justify-between shrink-0">
-                          <span className="text-[12.5px] font-mono text-[var(--app-text)] font-semibold truncate">
-                            {selectedCommitFile}
-                          </span>
-                          {loading && (
-                            <span className="text-[10px] text-[var(--app-text-muted)] flex items-center gap-1">
-                              <Loader2 className="animate-spin text-blue-500" size={12} />
-                              Loading...
-                            </span>
-                          )}
+                        {/* File Header */}
+                        <div className="h-10 bg-[var(--app-surface)] border-b border-[var(--app-border)] px-4 flex items-center justify-between shrink-0 font-mono text-[12px] font-bold text-[var(--app-text)]">
+                          <span>{selectedCommitFile}</span>
                         </div>
-                        
+
                         <div className="flex-1 overflow-auto p-4 font-mono text-[12px] leading-relaxed bg-[var(--app-surface)] border border-[var(--app-border)] rounded-lg custom-scrollbar select-text m-2">
                           {loading && fileDiff.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--app-text-muted)]">
@@ -1803,46 +1841,56 @@ export const GitDashboard: React.FC = () => {
                               No changes in this file.
                             </span>
                           ) : (
-                            fileDiff.map((line, idx) => (
-                              <div 
-                                key={idx}
-                                className={`flex whitespace-pre px-2.5 py-0.5 rounded-sm ${
-                                  line.line_type === 'added'
-                                    ? 'bg-green-500/10 text-green-500 border-l-[3px] border-green-500'
-                                    : line.line_type === 'deleted'
-                                    ? 'bg-red-500/10 text-red-500 border-l-[3px] border-red-500'
-                                    : 'text-[var(--app-text-muted)] border-l-[3px] border-transparent'
-                                }`}
-                              >
-                                <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
-                                  {line.line_type === 'added' ? '' : line.old_line_num}
-                                </span>
-                                <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
-                                  {line.line_type === 'deleted' ? '' : line.new_line_num}
-                                </span>
-                                <span className="w-4 select-none shrink-0 font-bold">
-                                  {line.line_type === 'added' ? '+' : line.line_type === 'deleted' ? '-' : ' '}
-                                </span>
-                                <span>{line.content}</span>
-                              </div>
-                            ))
+                            <div className="min-w-full w-max flex flex-col">
+                              {fileDiff.map((line, idx) => (
+                                <div 
+                                  key={idx}
+                                  className={`flex w-full whitespace-pre px-2.5 py-0.5 rounded-sm ${
+                                    line.line_type === 'added'
+                                      ? 'bg-green-500/10 text-green-500 border-l-[3px] border-green-500'
+                                      : line.line_type === 'deleted'
+                                      ? 'bg-red-500/10 text-red-500 border-l-[3px] border-red-500'
+                                      : 'text-[var(--app-text-muted)] border-l-[3px] border-transparent'
+                                  }`}
+                                >
+                                  <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
+                                    {line.line_type === 'added' ? '' : line.old_line_num}
+                                  </span>
+                                  <span className="w-10 text-right select-none text-[var(--app-text-muted)] mr-4 text-[10px]">
+                                    {line.line_type === 'deleted' ? '' : line.new_line_num}
+                                  </span>
+                                  <span className="w-4 select-none shrink-0 font-bold">
+                                    {line.line_type === 'added' ? '+' : line.line_type === 'deleted' ? '-' : ' '}
+                                  </span>
+                                  <span>{line.content}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
                     ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--app-text-muted)]">
-                        <FileText className="w-10 h-10 mb-2 text-[var(--app-text-muted)]" />
-                        <h4 className="text-[12.5px] font-semibold text-[var(--app-text)]">No file selected</h4>
-                        <p className="text-[10px] mt-1">Select a file from the list to view its changes in this commit.</p>
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--app-text-muted)] space-y-3">
+                        <div className="w-16 h-16 bg-[var(--app-surface)] rounded-2xl border border-[var(--app-border)] flex items-center justify-center shadow-lg">
+                          <FileText className="w-7 h-7 text-[var(--app-text-muted)]" />
+                        </div>
+                        <div>
+                          <h3 className="text-[14px] font-bold text-[var(--app-text)]">No File Selected</h3>
+                          <p className="text-[11px] text-[var(--app-text-muted)] mt-1">Select a file from the commit's changed files to inspect diff.</p>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--app-text-muted)]">
-                  <Clock className="w-12 h-12 mb-3 text-[var(--app-text-muted)]" />
-                  <h3 className="text-[13.5px] font-semibold text-[var(--app-text)]">No commit selected</h3>
-                  <p className="text-[11px] mt-1">Select a commit from the history list to inspect its contents.</p>
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--app-text-muted)] space-y-3">
+                  <div className="w-16 h-16 bg-[var(--app-surface)] rounded-2xl border border-[var(--app-border)] flex items-center justify-center shadow-lg">
+                    <Clock className="w-7 h-7 text-[var(--app-text-muted)]" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-[var(--app-text)]">No Commit Selected</h3>
+                    <p className="text-[11px] text-[var(--app-text-muted)] mt-1">Select a commit from the history list to inspect its details and files.</p>
+                  </div>
                 </div>
               )
             )}

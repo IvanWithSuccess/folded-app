@@ -61,13 +61,13 @@ export const SnapshotViewer: React.FC = () => {
   };
 
   const handleRestoreSnapshot = async (snap: SnapshotRecord) => {
-    const confirmed = await confirm(`Restore vault state to Sequence #${snap.seq}? Current active files will be replaced with files from this snapshot.`, { title: 'Restore Snapshot', kind: 'warning' });
+    const confirmed = await confirm(`Restore vault state to Snapshot #${snap.seq}? Current active files will be replaced with files from this snapshot.`, { title: 'Restore Snapshot', kind: 'warning' });
     if (!confirmed) return;
 
     setRestoringId(snap.id);
     try {
       await invoke('restore_snapshot', { snapshotId: snap.id });
-      await message(`Vault state successfully restored to Sequence #${snap.seq}.`, { title: 'Restored', kind: 'info' });
+      await message(`Vault state successfully restored to Snapshot #${snap.seq}.`, { title: 'Restored', kind: 'info' });
     } catch (e) {
       console.error('Failed to restore snapshot:', e);
       await message('Failed to restore snapshot: ' + ((e as Error).message || String(e)), { title: 'Error', kind: 'error' });
@@ -77,7 +77,7 @@ export const SnapshotViewer: React.FC = () => {
   };
 
   const handleDeleteSnapshot = async (snap: SnapshotRecord) => {
-    const confirmed = await confirm(`Delete snapshot Sequence #${snap.seq}? Any files exclusive to this snapshot will be permanently purged from Telegram.`, { title: 'Delete Snapshot', kind: 'warning' });
+    const confirmed = await confirm(`Delete Snapshot #${snap.seq}? Any files exclusive to this snapshot will be permanently purged from Telegram.`, { title: 'Delete Snapshot', kind: 'warning' });
     if (!confirmed) return;
 
     setDeletingId(snap.id);
@@ -155,7 +155,7 @@ export const SnapshotViewer: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1 bg-[#007aff] hover:bg-[#0066cc] active:scale-95 text-white text-[11px] font-medium rounded-lg shadow-xs transition-all cursor-pointer border-0 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isCapturing ? 'animate-spin' : ''}`} />
-            New Snapshot
+            {isCapturing ? 'Saving...' : 'New Snapshot'}
           </button>
         </div>
 
@@ -175,7 +175,7 @@ export const SnapshotViewer: React.FC = () => {
                   <CheckCircle className="w-4 h-4 text-[#34c759] flex-shrink-0" />
                   <div>
                     <div className="flex items-center gap-2 font-mono font-semibold text-[#1d1d1f] text-[12px]">
-                      <span>Sequence #{snap.seq}</span>
+                      <span>Snapshot #{snap.seq}</span>
                       <span className="text-[#86868b]">•</span>
                       <span className="text-[#515154] font-sans font-normal">{snap.file_count} Encrypted Files</span>
                     </div>
@@ -216,4 +216,5 @@ export const SnapshotViewer: React.FC = () => {
       </div>
     </div>
   );
+
 };
