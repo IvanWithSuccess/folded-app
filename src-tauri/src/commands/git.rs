@@ -1,7 +1,7 @@
 use tauri::{State, Emitter};
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use walkdir::WalkDir;
@@ -2439,7 +2439,7 @@ pub async fn run_git_e2e_tests(app_handle: tauri::AppHandle) -> Result<(), Strin
 
     let home = std::env::var("HOME").expect("No HOME env var");
     let app_dir = PathBuf::from(&home).join(".folded");
-    let sessions_dir = app_dir.join("sessions");
+    let _sessions_dir = app_dir.join("sessions");
 
     let cache = app_handle.state::<Arc<MetadataCache>>();
     let session = app_handle.state::<Arc<SessionManager>>();

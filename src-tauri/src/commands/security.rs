@@ -8,6 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+#[allow(dead_code)]
 fn expand_path(p_str: &str) -> PathBuf {
     if p_str.starts_with("~/") || p_str == "~" {
         if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
