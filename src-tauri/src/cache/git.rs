@@ -209,4 +209,45 @@ impl MetadataCache {
             .execute(&self.pool).await?;
         Ok(())
     }
+
+    pub async fn create_pull_request(&self, pr: super::PullRequestRecord) -> Result<()> {
+        sqlx::query("INSERT INTO git_pull_requests (id, repository_id, title, description, source_branch, target_branch, author, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(&pr.id)
+            .bind(&pr.repository_id)
+            .bind(&pr.title)
+            .bind(&pr.description)
+            .bind(&pr.source_branch)
+            .bind(&pr.target_branch)
+            .bind(&pr.author)
+            .bind(&pr.status)
+            .bind(pr.created_at)
+            .execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn get_pull_requests(&self, repo_id: &str) -> Result<Vec<super::PullRequestRecord>> {
+        let rows = sqlx::query("SELECT * FROM git_pull_requests WHERE repository_id = ? ORDER BY created_at DESC")
+            .bind(repo_id)
+            .fetch_all(&self.pool).await?;
+
+        Ok(rows.into_iter().map(|r| super::PullRequestRecord {
+            id: r.get("id"),
+            repository_id: r.get("repository_id"),
+            title: r.get("title"),
+            description: r.get("description"),
+            source_branch: r.get("source_branch"),
+            target_branch: r.get("target_branch"),
+            author: r.get("author"),
+            status: r.get("status"),
+            created_at: r.get("created_at"),
+        }).collect())
+    }
+
+    pub async fn update_pull_request_status(&self, pr_id: &str, status: &str) -> Result<()> {
+        sqlx::query("UPDATE git_pull_requests SET status = ? WHERE id = ?")
+            .bind(status).bind(pr_id)
+            .execute(&self.pool).await?;
+        Ok(())
+    }
 }
+

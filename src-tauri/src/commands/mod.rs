@@ -138,7 +138,13 @@ macro_rules! generate_handler {
             $crate::commands::git::check_remote_updates,
             $crate::commands::git::read_merge_state,
             $crate::commands::git::resolve_conflict,
-            $crate::commands::git::abort_merge
+            $crate::commands::git::abort_merge,
+            $crate::commands::git::create_pull_request,
+            $crate::commands::git::list_pull_requests,
+            $crate::commands::git::merge_pull_request,
+            $crate::commands::git::close_pull_request,
+            $crate::commands::git::cherry_pick_commit,
+            $crate::commands::git::squash_commits
         ]
     };
 }

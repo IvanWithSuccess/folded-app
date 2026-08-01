@@ -234,6 +234,22 @@ impl MetadataCache {
              FROM git_repositories"
         ).execute(&pool).await;
 
+        // Git Pull Requests table
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS git_pull_requests (
+                id TEXT PRIMARY KEY,
+                repository_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                source_branch TEXT NOT NULL,
+                target_branch TEXT NOT NULL,
+                author TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(repository_id) REFERENCES git_repositories(id)
+            )"
+        ).execute(&pool).await?;
+
         // Add performance indices
         let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_msg ON chunks(message_id)").execute(&pool).await;
         let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_notes_msg ON notes(message_id)").execute(&pool).await;

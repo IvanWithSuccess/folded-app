@@ -28,6 +28,7 @@ pub struct RepoFileEntry {
     pub size: u64,
     pub sha256: String,
     pub chunks: Vec<ChunkMeta>,
+    pub is_lfs: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -617,11 +618,20 @@ pub async fn commit_changes(
                 }
             }
 
+            let is_lfs = size > 10 * 1024 * 1024 || {
+                let lower = rel_path.to_lowercase();
+                lower.ends_with(".mp4") || lower.ends_with(".zip") || lower.ends_with(".psd") ||
+                lower.ends_with(".iso") || lower.ends_with(".tar") || lower.ends_with(".dmg") ||
+                lower.ends_with(".exe") || lower.ends_with(".bin") || lower.ends_with(".7z") ||
+                lower.ends_with(".rar") || lower.ends_with(".mov") || lower.ends_with(".mkv")
+            };
+
             manifest_files.insert(rel_path.clone(), RepoFileEntry {
                 relative_path: rel_path.clone(),
                 size,
                 sha256,
                 chunks,
+                is_lfs: if is_lfs { Some(true) } else { None },
             });
         } else {
             // Deleted: remove from manifest
@@ -2364,6 +2374,7 @@ pub async fn resolve_conflict(
                             sha256: sha,
                             size,
                             chunks,
+                            is_lfs: None,
                         });
                     }
                 }
@@ -2651,3 +2662,169 @@ pub async fn run_git_e2e_tests(app_handle: tauri::AppHandle) -> Result<(), Strin
     println!("Folded E2E integration test completed successfully!");
     Ok(())
 }
+
+#[tauri::command]
+pub async fn create_pull_request(
+    cache: State<'_, Arc<MetadataCache>>,
+    repo_id: String,
+    title: String,
+    description: Option<String>,
+    source_branch: String,
+    target_branch: String,
+    author: String,
+) -> Result<crate::cache::PullRequestRecord, String> {
+    let pr = crate::cache::PullRequestRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        repository_id: repo_id,
+        title,
+        description,
+        source_branch,
+        target_branch,
+        author,
+        status: "OPEN".to_string(),
+        created_at: chrono::Utc::now().timestamp(),
+    };
+    cache.create_pull_request(pr.clone()).await.map_err(|e| e.to_string())?;
+    Ok(pr)
+}
+
+#[tauri::command]
+pub async fn list_pull_requests(
+    cache: State<'_, Arc<MetadataCache>>,
+    repo_id: String,
+) -> Result<Vec<crate::cache::PullRequestRecord>, String> {
+    cache.get_pull_requests(&repo_id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn merge_pull_request(
+    cache: State<'_, Arc<MetadataCache>>,
+    repo_id: String,
+    pr_id: String,
+) -> Result<(), String> {
+    let prs = cache.get_pull_requests(&repo_id).await.map_err(|e| e.to_string())?;
+    let pr = prs.into_iter().find(|p| p.id == pr_id)
+        .ok_or_else(|| "Pull Request not found".to_string())?;
+
+    let repo = cache.get_repository(&repo_id).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Repository not found".to_string())?;
+
+    let source_branch_info = cache.get_branch(&repo_id, &pr.source_branch).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Source branch not found".to_string())?;
+
+    let source_head = source_branch_info.head_commit_id
+        .ok_or_else(|| "Source branch has no commits".to_string())?;
+
+    cache.update_branch_head(&repo_id, &pr.target_branch, Some(&source_head)).await
+        .map_err(|e| e.to_string())?;
+
+    if repo.current_branch == pr.target_branch {
+        cache.update_repository_heads(&repo_id, Some(&source_head), None).await
+            .map_err(|e| e.to_string())?;
+    }
+
+    cache.update_pull_request_status(&pr_id, "MERGED").await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn close_pull_request(
+    cache: State<'_, Arc<MetadataCache>>,
+    pr_id: String,
+) -> Result<(), String> {
+    cache.update_pull_request_status(&pr_id, "CLOSED").await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn cherry_pick_commit(
+    cache: State<'_, Arc<MetadataCache>>,
+    repo_id: String,
+    commit_id: String,
+    target_branch: String,
+) -> Result<String, String> {
+    let commit = cache.get_commit(&commit_id).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Commit not found".to_string())?;
+
+    let new_commit_id = uuid::Uuid::new_v4().to_string();
+    let target_branch_info = cache.get_branch(&repo_id, &target_branch).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Target branch not found".to_string())?;
+
+    let new_commit = GitCommit {
+        id: new_commit_id.clone(),
+        repository_id: repo_id.clone(),
+        parent_id: target_branch_info.head_commit_id,
+        message_summary: format!("Cherry-pick: {}", commit.message_summary),
+        message_description: commit.message_description,
+        author: commit.author,
+        timestamp: chrono::Utc::now().timestamp(),
+        manifest_data: commit.manifest_data,
+        is_pushed: false,
+        branch_name: target_branch.clone(),
+    };
+
+    cache.create_commit(new_commit).await.map_err(|e| e.to_string())?;
+    cache.update_branch_head(&repo_id, &target_branch, Some(&new_commit_id)).await
+        .map_err(|e| e.to_string())?;
+
+    let repo = cache.get_repository(&repo_id).await.map_err(|e| e.to_string())?.unwrap();
+    if repo.current_branch == target_branch {
+        cache.update_repository_heads(&repo_id, Some(&new_commit_id), None).await
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(new_commit_id)
+}
+
+#[tauri::command]
+pub async fn squash_commits(
+    cache: State<'_, Arc<MetadataCache>>,
+    repo_id: String,
+    commit_ids: Vec<String>,
+    new_summary: String,
+    new_description: Option<String>,
+) -> Result<String, String> {
+    if commit_ids.is_empty() {
+        return Err("No commits selected to squash".to_string());
+    }
+
+    let latest_id = &commit_ids[0];
+    let latest_commit = cache.get_commit(latest_id).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Latest commit not found".to_string())?;
+
+    let oldest_id = &commit_ids[commit_ids.len() - 1];
+    let oldest_commit = cache.get_commit(oldest_id).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Oldest commit not found".to_string())?;
+
+    let new_commit_id = uuid::Uuid::new_v4().to_string();
+    let squashed = GitCommit {
+        id: new_commit_id.clone(),
+        repository_id: repo_id.clone(),
+        parent_id: oldest_commit.parent_id,
+        message_summary: new_summary,
+        message_description: new_description,
+        author: latest_commit.author,
+        timestamp: chrono::Utc::now().timestamp(),
+        manifest_data: latest_commit.manifest_data,
+        is_pushed: false,
+        branch_name: latest_commit.branch_name.clone(),
+    };
+
+    cache.create_commit(squashed).await.map_err(|e| e.to_string())?;
+    cache.update_branch_head(&repo_id, &latest_commit.branch_name, Some(&new_commit_id)).await
+        .map_err(|e| e.to_string())?;
+
+    let repo = cache.get_repository(&repo_id).await.map_err(|e| e.to_string())?.unwrap();
+    if repo.current_branch == latest_commit.branch_name {
+        cache.update_repository_heads(&repo_id, Some(&new_commit_id), None).await
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(new_commit_id)
+}
+

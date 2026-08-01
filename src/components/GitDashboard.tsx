@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { PullRequestsViewer } from './PullRequestsViewer';
+import { RebaseModal } from './RebaseModal';
 import { 
   GitFork, GitCommit, Plus, Trash2, Folder, 
   ArrowUp, ArrowDown, RefreshCw, Check, CheckSquare, 
   Square, User, Clock, Settings, LogOut, FileText,
   AlertCircle, AlertTriangle, ChevronRight, HardDrive, Terminal,
-  Loader2
+  Loader2, GitPullRequest, Layers, Sparkles
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open, confirm } from '@tauri-apps/plugin-dialog';
@@ -42,7 +44,10 @@ interface GitCommitInfo {
   timestamp: number;
   manifest_data: string;
   is_pushed: boolean;
+  branch_name: string;
 }
+
+export type { GitCommitInfo };
 
 interface FileChange {
   relative_path: String;
@@ -50,16 +55,18 @@ interface FileChange {
 }
 
 interface DiffLine {
-  line_type: 'added' | 'deleted' | 'unchanged';
-  content: string;
+  line_type: 'added' | 'deleted' | 'context';
   old_line_num: number | null;
   new_line_num: number | null;
+  content: string;
 }
 
 interface RepoFileEntry {
   relative_path: string;
   size: number;
   sha256: string;
+  chunks: any[];
+  is_lfs?: boolean;
 }
 
 interface GitManifest {
@@ -98,7 +105,8 @@ export const GitDashboard: React.FC = () => {
 
   // Selection states
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<'CHANGES' | 'HISTORY'>('CHANGES');
+  const [activeTab, setActiveTab] = useState<'CHANGES' | 'HISTORY' | 'PRS'>('CHANGES');
+  const [showRebaseModal, setShowRebaseModal] = useState(false);
   
   // Column Resizer States
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -628,7 +636,8 @@ export const GitDashboard: React.FC = () => {
       return currentManifest.files.map(file => ({
         relative_path: file.relative_path,
         size: file.size,
-        status: 'added' as const
+        status: 'added' as const,
+        is_lfs: file.is_lfs,
       }));
     }
 
@@ -636,7 +645,7 @@ export const GitDashboard: React.FC = () => {
     const parentFilesMap = new Map(parentManifest.files.map(f => [f.relative_path, f]));
     const currentFilesMap = new Map(currentManifest.files.map(f => [f.relative_path, f]));
 
-    const result: Array<{ relative_path: string; size: number; status: 'added' | 'modified' | 'deleted' }> = [];
+    const result: Array<{ relative_path: string; size: number; status: 'added' | 'modified' | 'deleted'; is_lfs?: boolean }> = [];
 
     for (const file of currentManifest.files) {
       const parentFile = parentFilesMap.get(file.relative_path);
@@ -644,13 +653,15 @@ export const GitDashboard: React.FC = () => {
         result.push({
           relative_path: file.relative_path,
           size: file.size,
-          status: 'added'
+          status: 'added',
+          is_lfs: file.is_lfs,
         });
       } else if (parentFile.sha256 !== file.sha256) {
         result.push({
           relative_path: file.relative_path,
           size: file.size,
-          status: 'modified'
+          status: 'modified',
+          is_lfs: file.is_lfs,
         });
       }
     }
@@ -660,7 +671,8 @@ export const GitDashboard: React.FC = () => {
         result.push({
           relative_path: parentFile.relative_path,
           size: parentFile.size,
-          status: 'deleted'
+          status: 'deleted',
+          is_lfs: parentFile.is_lfs,
         });
       }
     }
@@ -1398,6 +1410,16 @@ export const GitDashboard: React.FC = () => {
               >
                 History ({history.length})
               </button>
+              <button
+                onClick={() => { setActiveTab('PRS'); setSelectedChangeFile(null); setSelectedCommit(null); }}
+                className={`flex-1 py-1 text-[12px] font-semibold rounded-md border cursor-pointer transition-all flex items-center justify-center gap-1 ${
+                  activeTab === 'PRS'
+                    ? 'bg-[var(--app-bg)] border-[var(--app-border)] text-[var(--app-text)] shadow-sm'
+                    : 'bg-transparent border-transparent text-[var(--app-text-muted)] hover:text-[var(--app-text)]'
+                }`}
+              >
+                <GitPullRequest className="w-3 h-3 text-blue-500" /> PRs
+              </button>
             </div>
 
             {/* Content Lists */}
@@ -1733,6 +1755,16 @@ export const GitDashboard: React.FC = () => {
                   <Loader2 className="animate-spin text-blue-500" size={24} />
                   <span className="text-[13px] font-semibold text-[var(--app-text)]">Loading repository history...</span>
                 </div>
+              ) : activeTab === 'PRS' ? (
+                <div className="h-full overflow-hidden">
+                  <PullRequestsViewer
+                    repoId={activeRepo.id}
+                    currentBranch={currentBranch}
+                    branches={branches}
+                    currentUser={accounts.find(a => a.id === activeRepo.telegram_chat_id)?.first_name || 'Developer'}
+                    onRefreshRepo={refreshRepoState}
+                  />
+                </div>
               ) : selectedCommit ? (
                 <div className="h-full flex flex-row overflow-hidden">
                   
@@ -1794,6 +1826,37 @@ export const GitDashboard: React.FC = () => {
                         >
                           <GitFork className="w-3.5 h-3.5" /> Branch from Commit
                         </button>
+
+                        <button
+                          onClick={async () => {
+                            if (!activeRepo) return;
+                            setLoading(true);
+                            try {
+                              await invoke('cherry_pick_commit', {
+                                repoId: activeRepo.id,
+                                commitId: selectedCommit.id,
+                                targetBranch: currentBranch,
+                              });
+                              refreshRepoState();
+                            } catch (e) {
+                              console.error('Failed to cherry-pick commit:', e);
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          disabled={loading}
+                          className="w-full py-2 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border border-purple-500/30 text-[12px] font-semibold rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Cherry-pick to {currentBranch}
+                        </button>
+
+                        <button
+                          onClick={() => setShowRebaseModal(true)}
+                          disabled={loading || history.length < 2}
+                          className="w-full py-2 bg-transparent hover:bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text-muted)] hover:text-[var(--app-text)] text-[12px] font-semibold rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Layers className="w-3.5 h-3.5" /> Squash Commits...
+                        </button>
                       </div>
                     </div>
 
@@ -1822,6 +1885,11 @@ export const GitDashboard: React.FC = () => {
                                     <span className="truncate" title={file.relative_path}>{file.relative_path}</span>
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0">
+                                    {file.is_lfs && (
+                                      <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/25">
+                                        LFS
+                                      </span>
+                                    )}
                                     <span className="text-[9.5px] text-[var(--app-text-muted)] opacity-85 group-hover:opacity-100">{formatBytes(file.size)}</span>
                                     <span className={`text-[8.5px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center shrink-0 ${
                                       file.status === 'added' 
@@ -2704,6 +2772,16 @@ export const GitDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Rebase & Squash Modal */}
+      {showRebaseModal && activeRepo && (
+        <RebaseModal
+          repoId={activeRepo.id}
+          commits={history}
+          onClose={() => setShowRebaseModal(false)}
+          onSuccess={() => refreshRepoState()}
+        />
       )}
 
     </div>

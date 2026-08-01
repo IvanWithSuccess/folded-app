@@ -83,3 +83,17 @@ pub struct GitBranch {
     pub created_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct PullRequestRecord {
+    pub id: String,
+    pub repository_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub source_branch: String,
+    pub target_branch: String,
+    pub author: String,
+    pub status: String, // "OPEN" | "MERGED" | "CLOSED"
+    pub created_at: i64,
+}
+
+
